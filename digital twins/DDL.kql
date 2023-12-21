@@ -1,0 +1,134 @@
+// Enable streaming ingestion policy on AdtRelationshipLifecycleEvents table
+.alter table AdtRelationshipLifecycleEvents policy streamingingestion enable 
+
+// Enable streaming ingestion policy on AdtTwinLifecycleEvents table
+.alter table AdtTwinLifecycleEvents policy streamingingestion enable 
+
+// Enable streaming ingestion policy on AdtPropertyEvents table
+.alter table AdtPropertyEvents policy streamingingestion enable 
+
+// Create a materialized view that contains the latest record for each TwinId property
+.create materialized-view with (backfill = true) AdtTwinPropertyEventsDedup on table AdtPropertyEvents {
+    AdtPropertyEvents
+    | where isempty(RelationshipId)
+    | project-away RelationshipTarget, RelationshipId
+    | summarize arg_max(TimeStamp, *) by Id, ModelId, Key
+}
+
+// Create a function that returns the latest record for each TwinId property where Action is not "Delete"
+.create-or-alter function TwinPropertiesLKV () {
+AdtTwinPropertyEventsDedup
+| where Action != "Delete"
+}
+
+// Create a function that returns the latest record for each TwinId property where Action is not "Delete" for a certain point in time
+.create-or-alter function TwinProperties (pointInTime:datetime) {
+ AdtPropertyEvents
+    | where isempty(RelationshipId) and TimeStamp < pointInTime
+    | project-away RelationshipTarget, RelationshipId
+    | summarize arg_max(TimeStamp, *) by Id, ModelId, Key
+    | where Action != "Delete"
+}
+
+// Create a materialized view that contains the latest record for each Edge property
+.create materialized-view with (backfill = true) AdtEdgePropertyEventsDedup on table AdtPropertyEvents {
+    AdtPropertyEvents
+    | where isnotempty(RelationshipId)
+    | project-away Id, ModelId
+    | summarize arg_max(TimeStamp, *) by RelationshipId, Key
+}
+
+// Create a function that returns the latest record for each edge property where Action is not "Delete"
+.create-or-alter function EdgePropertiesLKV () {
+AdtEdgePropertyEventsDedup
+| where Action != "Delete"
+}
+
+// Create a function that returns the latest record for each edge property where Action is not "Delete" for a certain point in time
+.create-or-alter function EdgeProperties (pointInTime:datetime) {
+AdtPropertyEvents
+    | where isnotempty(RelationshipId) 
+    | project-away Id, ModelId
+    | summarize arg_max(TimeStamp, *) by RelationshipId
+    | where Action != "Delete";
+}
+
+// Create a materialized view that contains the latest record for each RelationshipId
+.create materialized-view with (backfill = true) AdtRelationshipLifecycleEventsDedup on table AdtRelationshipLifecycleEvents {
+AdtRelationshipLifecycleEvents
+| summarize arg_max(TimeStamp, *) by RelationshipId
+}
+
+// Create a function that returns the latest record for each RelationshipId where Action is not "Delete"
+.create-or-alter function EdgesLKV (interestingProperties: dynamic = dynamic([])) {
+    AdtRelationshipLifecycleEventsDedup
+    | where Action != "Delete"
+    | join kind=leftouter (
+        EdgePropertiesLKV
+        | where Key in (interestingProperties) or array_length(interestingProperties) == 0
+        | extend p = bag_pack(Key, Value)
+        | summarize Properties = make_bag(p) by RelationshipId
+    ) on RelationshipId
+    | project-away RelationshipId1
+}
+
+// Create a materialized view that contains the latest record for each TwinId, ModelId
+.create materialized-view with (backfill = true) AdtTwinLifecycleEventsDedup on table AdtTwinLifecycleEvents {
+AdtTwinLifecycleEvents
+| summarize arg_max(TimeStamp, *) by TwinId, ModelId
+}
+
+// Create a function that returns the latest record for each TwinId, ModelId where Action is not "Delete"
+.create-or-alter function NodesLKV (interestingProperties: dynamic = dynamic([])) {
+    AdtTwinLifecycleEventsDedup
+    | where Action != "Delete"
+    | join kind=leftouter (
+        AdtTwinPropertyEventsDedup
+        | where Key in (interestingProperties) or array_length(interestingProperties) == 0
+        | extend p = bag_pack(Key, Value)
+        | summarize Properties = make_bag(p) by TwinId = Id, ModelId
+    ) on TwinId, ModelId
+    | project-away ModelId1, TwinId1
+}
+
+// Create a function that returns the record for each TwinId, ModelId where Action is not "Delete" on a certain point in time
+.create-or-alter function Nodes (pointInTime:datetime, interestingProperties: dynamic = dynamic([])) {
+    AdtTwinLifecycleEvents
+    | where TimeStamp < pointInTime
+    | summarize arg_max(TimeStamp, *) by TwinId, ModelId
+    | where Action != "Delete"
+    | join kind=leftouter (
+        TwinProperties(pointInTime)
+        | where Key in (interestingProperties) or array_length(interestingProperties) == 0
+        | extend p = bag_pack(Key, Value)
+        | summarize Properties = make_bag(p) by TwinId = Id, ModelId
+    ) on TwinId, ModelId
+    | project-away ModelId1, TwinId1
+}
+
+// Create a function that returns the edges for a certain point in time
+.create-or-alter function with (skipvalidation = "true") Edges (pointInTime:datetime, interestingProperties: dynamic = dynamic([])) {
+    AdtRelationshipLifecycleEvents
+    | where TimeStamp < pointInTime
+    | summarize arg_max(TimeStamp, *) by RelationshipId
+    | where Action != "Delete"
+    | join kind=leftouter (
+        EdgeProperties(pointInTime)
+        | where Key in (interestingProperties) or array_length(interestingProperties) == 0
+        | extend p = bag_pack(Key, Value)
+        | summarize Properties = make_bag(p) by RelationshipId
+    ) on RelationshipId
+    | project-away RelationshipId1
+}
+
+// Create or alter a function that returns the latest version of a graph
+.create-or-alter function with (skipvalidation = "true") GraphLKV(interestingEdgeProperties: dynamic = dynamic([]), interestingNodeProperties: dynamic = dynamic([])) {
+EdgesLKV(interestingEdgeProperties)
+| make-graph Source --> Target with NodesLKV(interestingNodeProperties) on TwinId
+}
+
+// Create a function that returns a graph for a certain point in time
+.create-or-alter function with (skipvalidation = "true") Graph (pointInTime:datetime, interestingEdgeProperties: dynamic = dynamic([]), interestingNodeProperties: dynamic = dynamic([])) {
+    Edges(pointInTime, interestingEdgeProperties)
+    | make-graph Source --> Target with Nodes(pointInTime, interestingNodeProperties) on TwinId
+}
