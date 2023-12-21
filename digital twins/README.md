@@ -125,7 +125,18 @@ EdgesLKV(interestingEdgeProperties)
 
 ## Ingesting sample data
 
-TODO
+Now we have a setup with Azure Digital Twins and Azure Data Explorer. It's ready to receive data. The goal of this section is to mimic a real-world example. We are starting with uploading a model to Azure Digital Twins and after that we are adding twins and relations based on the model.
+
+The ontology that we are going to use is provided by Bosch Building Technologies and available on [github](https://github.com/boschglobal/building-technologies-ontology-central). We are following the [foundation examples](https://github.com/boschglobal/building-technologies-ontology-central/blob/main/com/bosch/bt/Foundation/2.0.0/samples/README.md) and concentrate on the [desk usage](https://github.com/boschglobal/building-technologies-ontology-central/blob/main/com/bosch/bt/Foundation/2.0.0/samples/README.md#desk---desk-usage) scenario.
+
+### Uploading the ontology
+
+The following steps will upload the ontologies into the Azure Digital Twin service.
+
+1. [Open](https://learn.microsoft.com/azure/digital-twins/quickstart-azure-digital-twins-explorer#open-instance-in-azure-digital-twins-explorer) the Azure Digital Twins Explorer
+1. Clone the [Bosch Building Technologies - Ontology Central](https://github.com/boschglobal/building-technologies-ontology-central) repository
+1. [Upload](https://learn.microsoft.com/azure/digital-twins/quickstart-azure-digital-twins-explorer#upload-the-models-json-files) the foundation model [src folder](https://github.com/boschglobal/building-technologies-ontology-central/tree/main/com/bosch/bt/Foundation/2.0.0/src) 
+1. [Upload](https://learn.microsoft.com/azure/digital-twins/quickstart-azure-digital-twins-explorer#upload-the-models-json-files) ontology for the [desk](https://github.com/boschglobal/building-technologies-ontology-central/blob/main/com/bosch/bt/Foundation/2.0.0/samples/src/Desk.json) scenario.
 
 ## Visualize Data, both in Azure Digital Twins and Azure Data Explorer
 
