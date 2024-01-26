@@ -1,0 +1,40 @@
+// Rooted Query (Given a random TwinId, retrieve ID + all properties of all twins exactly 5 hops away)
+GraphLKV()
+| graph-match cycles=none (n1)-[e*5..5]-(n2)
+    where n1.TwinId == "site-1"
+    project n2.TwinId, n2.Properties
+
+// Unrooted query (Find two twins where a given highly changing property value is the same which are up to 5 hops away from each other.)
+let interestingProperties = dynamic(["function"]);
+GraphLKV(interestingProperties)
+| graph-match cycles=none (n1)-[e*1..5]-(n2)    
+    where tostring(n1.Properties.function) == tostring(n2.Properties.function) and isnotempty(n1.Properties.function)
+    project n1.TwinId, n2.TwinId
+
+// Get the occupancy of rooms that are not occupied
+GraphLKV()
+| graph-match (occupancy)-->(desk)-->(room)
+    where 
+        occupancy.ModelId == "dtmi:com:bosch:bt:foundation:point:MultiStateDataPoint;2" and 
+        occupancy.Properties.status != "occupied" and
+        room.ModelId == "dtmi:com:bosch:bt:foundation:space:Space;2" 
+    project desk = desk.TwinId, room = room.TwinId
+| summarize count() by room
+
+// Breakdown of occupancy by room
+GraphLKV()
+| graph-match (occupancy)-->(desk)-->(room)
+    where occupancy.ModelId == "dtmi:com:bosch:bt:foundation:point:MultiStateDataPoint;2" and room.ModelId == "dtmi:com:bosch:bt:foundation:space:Space;2"
+    project occupied = tostring(occupancy.Properties.status), room = room.TwinId
+| summarize occupancy = round(dcount(occupied == "occoupied") / toreal(count()),2) by room
+
+// Star-pattern: where are rooms with empty desks and christian is located in that room
+GraphLKV()
+| graph-match (alice)-[e*1..5]-(room)<--(desk)<--(occupancy),(bob)-->(room)
+    where alice.TwinId == "Alice" and occupancy.Properties.status != "occupied" and occupancy.ModelId == "dtmi:com:bosch:bt:foundation:point:MultiStateDataPoint;2" and 
+    bob.TwinId == "Bob"
+    project desk = desk.TwinId, room = room.TwinId
+| summarize count() by room
+
+//Create a graph at a specific point in time
+Graph(datetime(2022-03-22))

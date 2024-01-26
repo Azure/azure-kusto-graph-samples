@@ -135,15 +135,127 @@ The following steps will upload the ontologies into the Azure Digital Twin servi
 
 1. [Open](https://learn.microsoft.com/azure/digital-twins/quickstart-azure-digital-twins-explorer#open-instance-in-azure-digital-twins-explorer) the Azure Digital Twins Explorer
 1. Clone the [Bosch Building Technologies - Ontology Central](https://github.com/boschglobal/building-technologies-ontology-central) repository
-1. [Upload](https://learn.microsoft.com/azure/digital-twins/quickstart-azure-digital-twins-explorer#upload-the-models-json-files) the foundation model [src folder](https://github.com/boschglobal/building-technologies-ontology-central/tree/main/com/bosch/bt/Foundation/2.0.0/src) 
+1. [Upload](https://learn.microsoft.com/azure/digital-twins/quickstart-azure-digital-twins-explorer#upload-the-models-json-files) the foundation model [src folder](https://github.com/boschglobal/building-technologies-ontology-central/tree/main/com/bosch/bt/Foundation/2.0.0/src)
 1. [Upload](https://learn.microsoft.com/azure/digital-twins/quickstart-azure-digital-twins-explorer#upload-the-models-json-files) ontology for the [desk](https://github.com/boschglobal/building-technologies-ontology-central/blob/main/com/bosch/bt/Foundation/2.0.0/samples/src/Desk.json) scenario.
 
-## Visualize Data, both in Azure Digital Twins and Azure Data Explorer
+## Visualize the graph
 
 After the data historization is set up and the entities are created, organizations can visualize the historized data in both Azure Digital Twins and Azure Data Explorer. Azure Digital Twins provides a user-friendly interface for exploring and visualizing the graph data, while Azure Data Explorer offers advanced querying and visualization capabilities for in-depth analysis.
+
+[Azure Digital Twins Explorer](https://learn.microsoft.com/azure/digital-twins/concepts-azure-digital-twins-explorer) is a tool that helps you to manage and visualize your digital twin data. It provides a user-friendly interface to interact with your Azure Digital Twins instance, allowing you to explore the digital twin graph, create or update twins and relationships, and execute queries.
+
+With Azure Digital Twins Explorer, you can:
+
+- Visualize the topology of your digital twin graph.
+- Create, update, and delete digital twins and relationships.
+- Query your digital twin data using the built-in query editor.
+- Monitor changes in your digital twin data in real-time.
+
+To use Azure Digital Twins Explorer, you need to have an Azure Digital Twins instance and the necessary permissions to access it. Once you have these, you can open the Azure Digital Twins Explorer and connect to your instance to start exploring your digital twin data.
+
+The following image shows the twin graph based on the data we loaded in the previous steps.
+
+![You should see a picture of Azure Digital Twins showing a graph of twins](media/azure-digital-twins-viz.png "Azure Digital Twins visualization")
+
+[Kusto Explorer](https://learn.microsoft.com/azure/data-explorer/kusto/tools/kusto-explorer) is a rich desktop application that enables you to explore your data in Azure Data Explorer (Kusto). It provides a powerful interface for running Kusto Query Language (KQL) queries, with features like IntelliSense, syntax highlighting, and tabular and graphical results.
+
+With the new graph semantics feature, Kusto Explorer can be used to visualize graph data. This allows you to:
+
+- Visualize the structure of your graph data in a graphical format.
+- Explore the relationships between different entities in your graph.
+- Run complex graph queries and see the results in a visual, easy-to-understand format.
+
+To use Kusto Explorer, you need to have an Azure Data Explorer cluster and the necessary permissions to access it. Once you have these, you can open Kusto Explorer, connect to your cluster, and start exploring your graph data.
+
+Calling the function, which we created earlier, results in a graph being drawn in Kusto Explorer.
+
+```kusto
+GraphLKV()
+```
+
+![You should see a picture of Kusto Explorer showing a graph of twins](media/kusto-explorer-viz.png "Kusto Explorer visualization")
 
 ## Common query patterns
 
 To effectively analyze the historized graph data in Kusto, organizations should be familiar with common query patterns. These include querying for specific time ranges, aggregating data over time intervals, filtering based on entity properties, and performing joins with other datasets. Understanding these query patterns can help organizations extract valuable insights from the historized graph data.
 
 In conclusion, historizing the changes in the graph representation of digital twins to Kusto is essential for analyzing timeseries data and gaining valuable insights. It enables organizations to track historical trends, perform time-based analysis, and leverage predictive analytics techniques. By following the steps of setting up an Azure Digital Twins service, creating the necessary entities in Kusto, visualizing data in both Azure Digital Twins and Azure Data Explorer, and understanding common query patterns, organizations can optimize their operations, improve asset performance, and drive informed decision-making.
+
+```kusto
+// Rooted Query (Given a random TwinId, retrieve ID + all properties of all twins exactly 5 hops away)
+GraphLKV()
+| graph-match cycles=none (n1)-[e*5..5]-(n2)
+    where n1.TwinId == "site-1"
+    project n2.TwinId, n2.Properties
+```
+
+|n2_TwinId|n2_Properties|
+|---|---|
+|occupancy-1|{<br>  "function": "Virtual",<br>  "type": "Occupancy"<br>}|
+|occupancy-3|{<br>  "function": "Virtual",<br>  "type": "Occupancy",<br>  "status": null,<br>  "currentValue.value": null<br>}|
+|occupancy-2|{<br>  "function": "Virtual",<br>  "type": "Occupancy"<br>}|
+|occupancy-4|{<br>  "function": "Virtual",<br>  "type": "Occupancy",<br>  "currentValue.value": 1,<br>  "status": "occupied"<br>}|
+
+```kusto
+// Unrooted query (Find two twins where a given highly changing property value is the same which are up to 5 hops away from each other.)
+let interestingProperties = dynamic(["function"]);
+GraphLKV(interestingProperties)
+| graph-match cycles=none (n1)-[e*1..5]-(n2)    
+    where tostring(n1.Properties.function) == tostring(n2.Properties.function) and isnotempty(n1.Properties.function)
+    project n1.TwinId, n2.TwinId
+```
+
+|n1_TwinId|n2_TwinId|
+|---|---|
+|occupancy-3|occupancy-1|
+|occupancy-3|occupancy-2|
+|occupancy-1|occupancy-3|
+|occupancy-1|occupancy-2|
+|occupancy-2|occupancy-1|
+|occupancy-2|occupancy-3|
+
+
+```kusto
+GraphLKV()
+| graph-match (occupancy)-->(desk)-->(room)
+    where 
+        occupancy.ModelId == "dtmi:com:bosch:bt:foundation:point:MultiStateDataPoint;2" and 
+        occupancy.Properties.status != "occupied" and
+        room.ModelId == "dtmi:com:bosch:bt:foundation:space:Space;2" 
+    project desk = desk.TwinId, room = room.TwinId
+| summarize count() by room
+```
+
+|room|count_|
+|---|---|
+|room-1|3|
+
+
+```kusto
+GraphLKV()
+| graph-match (occupancy)-->(desk)-->(room)
+    where occupancy.ModelId == "dtmi:com:bosch:bt:foundation:point:MultiStateDataPoint;2" and room.ModelId == "dtmi:com:bosch:bt:foundation:space:Space;2"
+    project occupied = tostring(occupancy.Properties.status), room = room.TwinId
+| summarize occupancy = round(dcount(occupied == "occoupied") / toreal(count()),2) by room
+```
+
+|room|occupancy|
+|---|---|
+|room-1|0,33|
+|room-2|1|
+
+
+```kusto
+// Star-pattern: where are rooms with empty desks and christian is located in that room
+GraphLKV()
+| graph-match (alice)-[e*1..5]-(room)<--(desk)<--(occupancy),(bob)-->(room)
+    where alice.TwinId == "Alice" and occupancy.Properties.status != "occupied" and occupancy.ModelId == "dtmi:com:bosch:bt:foundation:point:MultiStateDataPoint;2" and 
+    bob.TwinId == "Bob"
+    project desk = desk.TwinId, room = room.TwinId
+| summarize count() by room
+```
+
+```kusto
+//Create a graph at a specific point in time
+Graph(datetime(2022-03-22))
+```
