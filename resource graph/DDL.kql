@@ -1,0 +1,224 @@
+.execute script <|
+//nodes
+.create-merge table nodeEvents (Action:string, TimeStamp:datetime, TenantId:string, NodeType:string, NodeId:string, Labels:dynamic) with (folder = "Bronze", docstring = "Landing table nodes")  
+.alter table nodeEvents policy streamingingestion enable 
+.alter-merge table nodeEvents policy retention softdelete = 0d recoverability = disabled
+.create function ifnotexists with (folder="Update") Update_NodeEvents () {
+    nodeEvents
+    | extend FQDN = strcat_delim("-", TenantId, NodeType, NodeId)
+}
+.create-merge table nodeEventsSilver (Action:string, TimeStamp:datetime, TenantId:string, NodeType:string, NodeId:string, Labels:dynamic, FQDN:string) with (folder = "Silver", docstring = "Enriched data of nodes")  
+.alter table nodeEventsSilver policy update
+```
+[
+    {
+        "IsEnabled": true,
+        "Source": "nodeEvents",
+        "Query": "Update_NodeEvents",
+        "IsTransactional": true,
+        "PropagateIngestionProperties": false
+    }
+]
+```
+.create  materialized-view  nodeEventsLKV on table nodeEventsSilver { nodeEventsSilver
+| summarize arg_max(TimeStamp, *) by FQDN }
+.set-or-replace nodeEvents <|
+datatable(Action:string, TimeStamp:datetime, TenantId:string, NodeType:string, NodeId:string, Labels:dynamic)
+[
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "Group", "Dev", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "Group", "Ops", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "User", "Alice", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "User", "Bob", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "ManagementGroup", "MG1", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "Subscription", "Sub1", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "Subscription", "Sub2", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "ResourceGroup", "RG1", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "ResourceGroup", "RG2", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "VirtualMachine", "VM1", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "VirtualMachine", "VM2", dynamic([]), 
+]
+.create function ifnotexists with (folder="Consumption/Events") nodeEventsGold () {
+    nodeEventsLKV
+    | where Action != "Delete"
+}
+//edges
+.create-merge table edgeEvents (Action:string, TimeStamp:datetime, TenantId:string, EdgeType:string, SourceTenantId:string, SourceNodeType:string, SourceNodeId:string, TargetTenantId:string, TargetNodeType:string, TargetNodeId:string, Labels:dynamic) with (folder = "Bronze", docstring = "Landing table edges")  
+.alter table edgeEvents policy streamingingestion enable 
+.alter-merge table edgeEvents policy retention softdelete = 0d recoverability = disabled
+.create function ifnotexists with (folder="Update") Update_EdgeEvents () {
+edgeEvents
+| extend SourceFQDN = strcat_delim("-", SourceTenantId, SourceNodeType, SourceNodeId), TargetFQDN = strcat_delim("-", TargetTenantId, TargetNodeType, TargetNodeId)
+| extend FQDN = strcat_delim("#",SourceFQDN, TargetFQDN, TenantId, EdgeType)
+}
+.create-merge table edgeEventsSilver (Action:string, TimeStamp:datetime, TenantId:string, EdgeType:string, SourceTenantId:string, SourceNodeType:string, SourceNodeId:string, TargetTenantId:string, TargetNodeType:string, TargetNodeId:string, Labels:dynamic, SourceFQDN:string, TargetFQDN:string, FQDN:string) with (folder = "Silver", docstring = "Enriched data of edges") 
+.alter table edgeEventsSilver policy update
+```
+[
+    {
+        "IsEnabled": true,
+        "Source": "edgeEvents",
+        "Query": "Update_EdgeEvents",
+        "IsTransactional": true,
+        "PropagateIngestionProperties": false
+    }
+]
+```
+.create  materialized-view  edgeEventsLKV on table edgeEventsSilver { edgeEventsSilver
+| summarize arg_max(TimeStamp, *) by FQDN }
+.set-or-replace edgeEvents <|
+datatable(Action:string, TimeStamp:datetime, TenantId:string, EdgeType:string, SourceTenantId:string, SourceNodeType:string, SourceNodeId:string, TargetTenantId:string, TargetNodeType:string, TargetNodeId:string, Labels:dynamic)
+[
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "contains", "Contoso", "Group", "Dev", "Contoso", "Group", "Ops", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "contains", "Contoso", "Group", "Ops", "Contoso", "User", "Alice", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "contains", "Contoso", "Group", "Dev", "Contoso", "User", "Bob", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "contains", "Contoso", "ManagementGroup", "MG1", "Contoso", "Subscription", "Sub1", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "contains", "Contoso", "ManagementGroup", "MG1", "Contoso", "Subscription", "Sub2", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "contains", "Contoso", "Subscription", "Sub1", "Contoso", "ResourceGroup", "RG1", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "contains", "Contoso", "Subscription", "Sub2", "Contoso", "ResourceGroup", "RG2", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "contains", "Contoso", "ResourceGroup", "RG1", "Contoso", "VirtualMachine", "VM1", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "contains", "Contoso", "ResourceGroup", "RG2", "Contoso", "VirtualMachine", "VM2", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "authorized_on", "Contoso", "Group", "Dev", "Contoso", "ManagementGroup", "MG1", dynamic(["Reader"]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "authorized_on", "Contoso", "Group", "Ops", "Contoso", "Subscription", "Sub2", dynamic(["Owner"]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "authorized_on", "Contoso", "User", "Bob", "Contoso", "VirtualMachine", "VM1", dynamic(["Reader"]), 
+]
+.create function ifnotexists with (folder="Consumption/Events") edgeEventsGold () {
+    edgeEventsLKV
+    | where Action != "Delete"
+}
+//edge properties
+.create-merge table edgePropertyEvents (Action:string, TimeStamp:datetime, TenantId:string, EdgeType:string, SourceTenantId:string, SourceNodeType:string, SourceNodeId:string, TargetTenantId:string, TargetNodeType:string, TargetNodeId:string, PropertyName:string, PropertyValue:dynamic) with (folder = "Bronze", docstring = "Landing table for edge properties")  
+.alter table edgePropertyEvents policy streamingingestion enable 
+.alter-merge table edgePropertyEvents policy retention softdelete = 0d recoverability = disabled
+.create function ifnotexists with (folder="Update") Update_EdgePropertyEvents () {
+edgePropertyEvents
+| extend SourceFQDN = strcat_delim("-", SourceTenantId, SourceNodeType, SourceNodeId), TargetFQDN = strcat_delim("-", TargetTenantId, TargetNodeType, TargetNodeId)
+| extend FQDN = strcat_delim("#",SourceFQDN, TargetFQDN, TenantId, EdgeType)
+}
+.create-merge table edgePropertyEventsSilver (Action:string, TimeStamp:datetime, TenantId:string, EdgeType:string, SourceTenantId:string, SourceNodeType:string, SourceNodeId:string, TargetTenantId:string, TargetNodeType:string, TargetNodeId:string, PropertyName:string, PropertyValue:dynamic, SourceFQDN:string, TargetFQDN:string, FQDN:string) with (folder = "Silver", docstring = "Enriched data of properties for edges") 
+.alter table edgePropertyEventsSilver policy update
+```
+[
+    {
+        "IsEnabled": true,
+        "Source": "edgePropertyEvents",
+        "Query": "Update_EdgePropertyEvents",
+        "IsTransactional": true,
+        "PropagateIngestionProperties": false
+    }
+]
+```
+.create  materialized-view  edgePropertyEventsLKV on table edgePropertyEventsSilver { edgePropertyEventsSilver
+| summarize arg_max(TimeStamp, *) by FQDN }
+.set-or-replace edgePropertyEvents <|
+datatable(Action:string, TimeStamp:datetime, TenantId:string, EdgeType:string, SourceTenantId:string, SourceNodeType:string, SourceNodeId:string, TargetTenantId:string, TargetNodeType:string, TargetNodeId:string, PropertyName:string, PropertyValue:dynamic)
+[
+    "Add", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "authorized_on", "Contoso", "User", "Bob", "Contoso", "VirtualMachine", "VM1", "LocationFilter", dynamic(["UK"]), 
+]
+.create function ifnotexists with (folder="Consumption/Events") edgePropertyEventsGold () {
+    edgePropertyEventsLKV
+    | where Action != "Delete"
+}
+//node properties
+.create-merge table nodePropertyEvents (Action:string, TimeStamp:datetime, TenantId:string, NodeType:string, NodeId:string, PropertyName:string, PropertyValue:dynamic) with (folder = "Bronze", docstring = "Landing table for node properties") 
+.alter table nodePropertyEvents policy streamingingestion enable 
+.alter-merge table nodePropertyEvents policy retention softdelete = 0d recoverability = disabled
+.create function ifnotexists with (folder="Update") Update_NodePropertyEvents () {
+nodePropertyEvents
+| extend FQDN = strcat_delim("-", TenantId, NodeType, NodeId)
+}
+.create-merge table nodePropertyEventsSilver (Action:string, TimeStamp:datetime, TenantId:string, NodeType:string, NodeId:string, PropertyName:string, PropertyValue:dynamic, FQDN:string) with (folder = "Silver", docstring = "Enriched data of properties for nodes") 
+.alter table nodePropertyEventsSilver policy update
+```
+[
+    {
+        "IsEnabled": true,
+        "Source": "nodePropertyEvents",
+        "Query": "Update_NodePropertyEvents",
+        "IsTransactional": true,
+        "PropagateIngestionProperties": false
+    }
+]
+```
+.create  materialized-view  nodePropertyEventsLKV on table nodePropertyEventsSilver { nodePropertyEventsSilver
+| summarize arg_max(TimeStamp, *) by FQDN }
+.set-or-replace nodePropertyEvents <|
+datatable(Action:string, TimeStamp:datetime, TenantId:string, NodeType:string, NodeId:string, PropertyName:string, PropertyValue:dynamic)
+[
+    "Add", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "User", "Alice", "Age", dynamic("42"), 
+    "Add", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "User", "Alice", "Location", dynamic("UK"), 
+    "Add", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "User", "Bob", "Location", dynamic("Germany"), 
+    "Add", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "User", "VM1", "Region", dynamic("UK South"), 
+    "Add", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "User", "VM2", "Region", dynamic("West Europe"), 
+    "Add", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "User", "RG2", "Region", dynamic("West Europe"), 
+    "Add", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "User", "RG1", "Region", dynamic("UK South"), 
+]
+.create function ifnotexists with (folder="Consumption/Events") nodePropertyEventsGold () {
+    nodePropertyEventsLKV
+    | where Action != "Delete"
+}
+.create-or-alter function with (folder = "Consumption/Graph", docstring = "Get the edge properties at a specific point in time", skipvalidation = "true") EdgeProperties(pointInTime:datetime) {
+edgePropertyEventsSilver
+    | where TimeStamp < pointInTime
+    | summarize arg_max(TimeStamp, *) by FQDN, PropertyName
+    | where Action != "Delete";
+}
+.create-or-alter function with (folder = "Consumption/Graph", docstring = "Get the edges of a graph at a specific point in time", skipvalidation = "true") Edges(pointInTime:datetime, interestingProperties:dynamic=dynamic([])) {
+    edgeEventsSilver
+    | where TimeStamp < pointInTime
+    | summarize arg_max(TimeStamp, *) by FQDN
+    | where Action != "Delete"
+    | join kind=leftouter (
+        EdgeProperties(pointInTime)
+        | where PropertyName in (interestingProperties) or array_length(interestingProperties) == 0
+        | extend p = bag_pack(PropertyName, PropertyValue)
+        | summarize Properties = make_bag(p) by FQDN
+    ) on FQDN
+    | project EdgeType, Action, TimeStamp, Labels, Properties, SourceFQDN, TargetFQDN, TenantId, FQDN
+} 
+.create-or-alter function with (folder = "Consumption/Graph", docstring = "Get the last known state of edges of a graph", skipvalidation = "true") EdgesLKV(interestingProperties:dynamic=dynamic([])) {
+    edgeEventsGold
+    | join kind=leftouter (
+        edgePropertyEventsGold
+        | where PropertyName in (interestingProperties) or array_length(interestingProperties) == 0
+        | extend p = bag_pack(PropertyName, PropertyValue)
+        | summarize Properties = make_bag(p) by FQDN
+    ) on FQDN
+    | project EdgeType, Action, TimeStamp, Labels, Properties, SourceFQDN, TargetFQDN, TenantId, FQDN
+} 
+.create-or-alter function with (folder = "Consumption/Graph", docstring = "Get the node properties at a specific point in time", skipvalidation = "true") NodeProperties(pointInTime:datetime) {
+ nodePropertyEventsSilver
+    | where TimeStamp < pointInTime
+    | summarize arg_max(TimeStamp, *) by FQDN, PropertyName
+    | where Action != "Delete"
+}
+.create-or-alter function with (folder = "Consumption/Graph", docstring = "Get the nodes of a graph at a specific point in time", skipvalidation = "true") Nodes(pointInTime:datetime, interestingProperties:dynamic=dynamic([])) {
+    nodeEventsSilver
+    | where TimeStamp < pointInTime
+    | summarize arg_max(TimeStamp, *) by FQDN
+    | where Action != "Delete"
+    | join kind=leftouter (
+        NodeProperties(pointInTime)
+        | where PropertyName in (interestingProperties) or array_length(interestingProperties) == 0
+        | extend p = bag_pack(PropertyName, PropertyValue)
+        | summarize Properties = make_bag(p) by FQDN
+    ) on FQDN
+    | project NodeType, NodeId, Action, TimeStamp, Labels, Properties, TenantId, FQDN
+} 
+.create-or-alter function with (folder = "Consumption/Graph", docstring = "Get the last known state of nodes of a graph", skipvalidation = "true") NodesLKV(interestingProperties:dynamic=dynamic([])) {
+    nodeEventsGold
+    | join kind=leftouter (
+        nodePropertyEventsGold
+        | where PropertyName in (interestingProperties) or array_length(interestingProperties) == 0
+        | extend p = bag_pack(PropertyName, PropertyValue)
+        | summarize Properties = make_bag(p) by FQDN
+    ) on FQDN
+    | project NodeType, NodeId, Action, TimeStamp, Labels, Properties, TenantId, FQDN
+} 
+.create-or-alter function with (folder = "Consumption/Graph", docstring = "Get the graph at a specific point in time", skipvalidation = "true") Graph(pointInTime:datetime, interestingEdgeProperties:dynamic=dynamic([]), interestingNodeProperties:dynamic=dynamic([])) {
+    Edges(pointInTime, interestingEdgeProperties)
+    | make-graph SourceFQDN --> TargetFQDN with Nodes(pointInTime, interestingNodeProperties) on FQDN
+} 
+.create-or-alter function with (folder = "Consumption/Graph", docstring = "Get the last known state of the graph", skipvalidation = "true") GraphLKV(interestingEdgeProperties:dynamic=dynamic([]), interestingNodeProperties:dynamic=dynamic([])) {
+EdgesLKV(interestingEdgeProperties)
+| make-graph SourceFQDN --> TargetFQDN with NodesLKV(interestingNodeProperties) on FQDN
+}
