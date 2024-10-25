@@ -1,7 +1,66 @@
-
-Graph(now())
 NodesLKV()
-Nodes(now())
-Edges(now())
+
+let interestingNodePriperties = dynamic(["Age"]);
+NodesLKV(interestingNodePriperties)
+
+Nodes(datetime(2024-10-22))
+
 EdgesLKV()
 
+let interestingEdgePriperties = dynamic(["LocationFilter"]);
+Edges(datetime(2024-10-22), interestingEdgePriperties)
+
+let interestingNodePriperties = dynamic(["Age"]);
+let interestingEdgePriperties = dynamic(["LocationFilter"]);
+GraphLKV(interestingEdgePriperties, interestingNodePriperties)
+
+Graph(now())
+
+//Statistics on resource assignments
+let interestingUser = "Alice";
+GraphLKV()
+| graph-match (resource)<-[authorized_on*1..4]-(group)-[hasMember*1..255]->(user)
+    where user.NodeId == interestingUser and user.NodeType == "User" and hasMember.EdgeType == "has_member" and group.NodeType == "Group" and
+        authorized_on.EdgeType in ("authorized_on", "contains_resource")
+    project Username=user.NodeId, userFQDN=user.FQDN, resourceTenantId=resource.TenantId, resourceType=resource.NodeType, resourceName=resource.NodeId
+| summarize Username = take_any(Username), Tenants=dcount(resourceTenantId), ResourceTypes=dcount(resourceType), Resources=dcount(resourceName) by userFQDN
+
+//Check Bob, who has direct and group based access to resources
+let interestingUser = "Bob";
+let G = GraphLKV();
+let groupBasedAccess = view() {
+    G
+    | graph-match (resource)<-[authorized_on*1..4]-(group)-[hasMember*1..255]->(user)
+        where user.NodeId == interestingUser and user.NodeType == "User" and hasMember.EdgeType == "has_member" and group.NodeType == "Group" and
+            authorized_on.EdgeType in ("authorized_on", "contains_resource")
+        project Username=user.NodeId, userFQDN=user.FQDN, resourceTenantId=resource.TenantId, resourceType=resource.NodeType, resourceName=resource.NodeId
+};
+let directAccess = view() {
+    G
+    | graph-match (resource)<-[authorized_on*1..4]-(user)
+        where user.NodeId == interestingUser and user.NodeType == "User" and
+            authorized_on.EdgeType in ("authorized_on", "contains_resource")
+        project Username=user.NodeId, userFQDN=user.FQDN, resourceTenantId=resource.TenantId, resourceType=resource.NodeType, resourceName=resource.NodeId
+};
+union withsource=Assignment groupBasedAccess, directAccess
+| summarize Username = take_any(Username), Tenants=dcount(resourceTenantId), ResourceTypes=dcount(resourceType), Resources=dcount(resourceName) by userFQDN, Assignment
+
+//Check Bob, who has direct and group based access to resources
+let interestingUsers = dynamic(["Bob", "Alice"]);
+let G = GraphLKV();
+let groupBasedAccess = view() {
+    G
+    | graph-match (resource)<-[authorized_on*1..4]-(group)-[hasMember*1..255]->(user)
+        where user.NodeId in (interestingUsers) and user.NodeType == "User" and hasMember.EdgeType == "has_member" and group.NodeType == "Group" and
+            authorized_on.EdgeType in ("authorized_on", "contains_resource")
+        project Username=user.NodeId, userFQDN=user.FQDN, resourceTenantId=resource.TenantId, resourceType=resource.NodeType, resourceName=resource.NodeId
+};
+let directAccess = view() {
+    G
+    | graph-match (resource)<-[authorized_on*1..4]-(user)
+        where user.NodeId in (interestingUsers) and user.NodeType == "User" and
+            authorized_on.EdgeType in ("authorized_on", "contains_resource")
+        project Username=user.NodeId, userFQDN=user.FQDN, resourceTenantId=resource.TenantId, resourceType=resource.NodeType, resourceName=resource.NodeId
+};
+union withsource=Assignment groupBasedAccess, directAccess
+| summarize Username = take_any(Username), Tenants=dcount(resourceTenantId), ResourceTypes=dcount(resourceType), Resources=dcount(resourceName) by userFQDN, Assignment

@@ -1,3 +1,4 @@
+//create
 .execute script <|
 //nodes
 .create-merge table nodeEvents (Action:string, TimeStamp:datetime, TenantId:string, NodeType:string, NodeId:string, Labels:dynamic) with (folder = "Bronze", docstring = "Landing table nodes")  
@@ -68,15 +69,15 @@ edgeEvents
 .set-or-replace edgeEvents <|
 datatable(Action:string, TimeStamp:datetime, TenantId:string, EdgeType:string, SourceTenantId:string, SourceNodeType:string, SourceNodeId:string, TargetTenantId:string, TargetNodeType:string, TargetNodeId:string, Labels:dynamic)
 [
-    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "contains", "Contoso", "Group", "Dev", "Contoso", "Group", "Ops", dynamic([]), 
-    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "contains", "Contoso", "Group", "Ops", "Contoso", "User", "Alice", dynamic([]), 
-    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "contains", "Contoso", "Group", "Dev", "Contoso", "User", "Bob", dynamic([]), 
-    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "contains", "Contoso", "ManagementGroup", "MG1", "Contoso", "Subscription", "Sub1", dynamic([]), 
-    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "contains", "Contoso", "ManagementGroup", "MG1", "Contoso", "Subscription", "Sub2", dynamic([]), 
-    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "contains", "Contoso", "Subscription", "Sub1", "Contoso", "ResourceGroup", "RG1", dynamic([]), 
-    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "contains", "Contoso", "Subscription", "Sub2", "Contoso", "ResourceGroup", "RG2", dynamic([]), 
-    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "contains", "Contoso", "ResourceGroup", "RG1", "Contoso", "VirtualMachine", "VM1", dynamic([]), 
-    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "contains", "Contoso", "ResourceGroup", "RG2", "Contoso", "VirtualMachine", "VM2", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "has_member", "Contoso", "Group", "Dev", "Contoso", "Group", "Ops", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "has_member", "Contoso", "Group", "Ops", "Contoso", "User", "Alice", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "has_member", "Contoso", "Group", "Dev", "Contoso", "User", "Bob", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "contains_resource", "Contoso", "ManagementGroup", "MG1", "Contoso", "Subscription", "Sub1", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "contains_resource", "Contoso", "ManagementGroup", "MG1", "Contoso", "Subscription", "Sub2", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "contains_resource", "Contoso", "Subscription", "Sub1", "Contoso", "ResourceGroup", "RG1", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "contains_resource", "Contoso", "Subscription", "Sub2", "Contoso", "ResourceGroup", "RG2", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "contains_resource", "Contoso", "ResourceGroup", "RG1", "Contoso", "VirtualMachine", "VM1", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "contains_resource", "Contoso", "ResourceGroup", "RG2", "Contoso", "VirtualMachine", "VM2", dynamic([]), 
     "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "authorized_on", "Contoso", "Group", "Dev", "Contoso", "ManagementGroup", "MG1", dynamic(["Reader"]), 
     "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "authorized_on", "Contoso", "Group", "Ops", "Contoso", "Subscription", "Sub2", dynamic(["Owner"]), 
     "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "authorized_on", "Contoso", "User", "Bob", "Contoso", "VirtualMachine", "VM1", dynamic(["Reader"]), 
@@ -222,3 +223,34 @@ edgePropertyEventsSilver
 EdgesLKV(interestingEdgeProperties)
 | make-graph SourceFQDN --> TargetFQDN with NodesLKV(interestingNodeProperties) on FQDN
 }
+
+//cleanup
+.execute script <|
+.drop functions (Update_NodeEvents,
+  nodeEventsGold,
+  Update_EdgeEvents,
+  edgeEventsGold,
+  Update_EdgePropertyEvents,
+  edgePropertyEventsGold,
+  Update_NodePropertyEvents,
+  nodePropertyEventsGold,
+  EdgeProperties,
+  Edges,
+  EdgesLKV,
+  NodeProperties,
+  Nodes,
+  NodesLKV,
+  Graph,
+  GraphLKV)
+.drop materialized-view edgeEventsLKV
+.drop materialized-view edgePropertyEventsLKV
+.drop materialized-view nodeEventsLKV
+.drop materialized-view nodePropertyEventsLKV
+.drop tables (nodeEvents,
+  nodeEventsSilver,
+  edgeEvents,
+  edgeEventsSilver,
+  edgePropertyEvents,
+  edgePropertyEventsSilver,
+  nodePropertyEvents,
+  nodePropertyEventsSilver)
