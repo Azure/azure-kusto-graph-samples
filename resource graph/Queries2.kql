@@ -1,24 +1,27 @@
-NodesLKV()
+let tenants=dynamic(["Contoso"]);
+NodesLKV(interestingTenants=tenants)
 
-let interestingNodePriperties = dynamic(["Age"]);
-NodesLKV(interestingNodePriperties)
+let properties = dynamic(["Age"]);
+NodesLKV(interestingProperties=properties)
 
 Nodes(datetime(2024-10-22))
 
 EdgesLKV()
 
-let interestingEdgePriperties = dynamic(["LocationFilter"]);
-Edges(datetime(2024-10-22), interestingEdgePriperties)
+let properties = dynamic(["LocationFilter"]);
+Edges(datetime(2024-10-22), interestingProperties=properties)
 
-let interestingNodePriperties = dynamic(["Age"]);
-let interestingEdgePriperties = dynamic(["LocationFilter"]);
-GraphLKV(interestingEdgePriperties, interestingNodePriperties)
+let tenants=dynamic(["Contoso"]);
+let nodeProperties = dynamic(["Age"]);
+let edgeProperties = dynamic(["LocationFilter"]);
+GraphLKV(interestingTenants=tenants, interestingEdgeProperties=edgeProperties, interestingNodeProperties=nodeProperties)
 
 Graph(now())
 
 //Statistics on resource assignments
 let interestingUser = "Alice";
-GraphLKV()
+let tenants=dynamic(["Contoso"]);
+GraphLKV(interestingTenants=tenants)
 | graph-match (resource)<-[authorized_on*1..4]-(group)-[hasMember*1..255]->(user)
     where user.NodeId == interestingUser and user.NodeType == "User" and hasMember.EdgeType == "has_member" and group.NodeType == "Group" and
         authorized_on.EdgeType in ("authorized_on", "contains_resource")
@@ -68,7 +71,8 @@ union withsource=Assignment groupBasedAccess, directAccess
 //Provide all permissions of a user on VMs
 let interestingUsers = dynamic(["Alice", "Bob"]);
 let interestingResourceTypes = dynamic(["VirtualMachine"]);
-let G = GraphLKV();
+let tenants=dynamic(["Contoso"]);
+let G = GraphLKV(interestingTenants=tenants);
 let groupBasedAccess = view() {
     G
     | graph-match (resource)<-[authorized_on*1..4]-(group)-[hasMember*1..255]->(user)
@@ -94,7 +98,8 @@ union withsource=Assignment groupBasedAccess, directAccess
 //Blast radius... what happens if a resource is not working? Which users are impacted?
 let interestingResourceTypes = dynamic(["VirtualMachine"]);
 let interestingResources = dynamic(["VM1"]);
-GraphLKV()
+let tenants=dynamic(["Contoso"]);
+GraphLKV(interestingTenants=tenants)
 | graph-match cycles=none (resource)-[e*1..255]-(user)
     where resource.NodeId in (interestingResources) and resource.NodeType in (interestingResourceTypes) and user.NodeType == "User"
     project Username=user.NodeId, Tenant=user.TenantId, userFQDN=user.FQDN

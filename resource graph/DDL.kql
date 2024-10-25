@@ -38,8 +38,9 @@ datatable(Action:string, TimeStamp:datetime, TenantId:string, NodeType:string, N
     "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "VirtualMachine", "VM1", dynamic([]), 
     "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "VirtualMachine", "VM2", dynamic([]), 
 ]
-.create function ifnotexists with (folder="Consumption/Events") nodeEventsGold () {
+.create function ifnotexists with (folder="Consumption/Events") nodeEventsGold (interestingTenants:dynamic = dynamic([])) {
     nodeEventsLKV
+    | where TenantId in (interestingTenants) or array_length(interestingTenants) == 0
     | where Action != "Delete"
 }
 //edges
@@ -82,8 +83,9 @@ datatable(Action:string, TimeStamp:datetime, TenantId:string, EdgeType:string, S
     "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "authorized_on", "Contoso", "Group", "Ops", "Contoso", "Subscription", "Sub2", dynamic(["Owner"]), 
     "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "authorized_on", "Contoso", "User", "Bob", "Contoso", "VirtualMachine", "VM1", dynamic(["Reader"]), 
 ]
-.create function ifnotexists with (folder="Consumption/Events") edgeEventsGold () {
+.create function ifnotexists with (folder="Consumption/Events") edgeEventsGold (interestingTenants:dynamic = dynamic([])) {
     edgeEventsLKV
+    | where TenantId in (interestingTenants) or array_length(interestingTenants) == 0
     | where Action != "Delete"
 }
 //edge properties
@@ -115,8 +117,9 @@ datatable(Action:string, TimeStamp:datetime, TenantId:string, EdgeType:string, S
 [
     "Add", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "authorized_on", "Contoso", "User", "Bob", "Contoso", "VirtualMachine", "VM1", "LocationFilter", dynamic(["UK"]), 
 ]
-.create function ifnotexists with (folder="Consumption/Events") edgePropertyEventsGold () {
+.create function ifnotexists with (folder="Consumption/Events") edgePropertyEventsGold (interestingTenants:dynamic = dynamic([])) {
     edgePropertyEventsLKV
+    | where TenantId in (interestingTenants) or array_length(interestingTenants) == 0
     | where Action != "Delete"
 }
 //node properties
@@ -153,75 +156,80 @@ datatable(Action:string, TimeStamp:datetime, TenantId:string, NodeType:string, N
     "Add", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "User", "RG2", "Region", dynamic("West Europe"), 
     "Add", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "User", "RG1", "Region", dynamic("UK South"), 
 ]
-.create function ifnotexists with (folder="Consumption/Events") nodePropertyEventsGold () {
+.create function ifnotexists with (folder="Consumption/Events") nodePropertyEventsGold (interestingTenants:dynamic = dynamic([])) {
     nodePropertyEventsLKV
+    | where TenantId in (interestingTenants) or array_length(interestingTenants) == 0
     | where Action != "Delete"
 }
-.create-or-alter function with (folder = "Consumption/Graph", docstring = "Get the edge properties at a specific point in time", skipvalidation = "true") EdgeProperties(pointInTime:datetime) {
+.create-or-alter function with (folder = "Consumption/Graph", docstring = "Get the edge properties at a specific point in time", skipvalidation = "true") EdgeProperties(pointInTime:datetime, interestingTenants:dynamic = dynamic([])) {
 edgePropertyEventsSilver
     | where TimeStamp < pointInTime
+    | where TenantId in (interestingTenants) or array_length(interestingTenants) == 0
     | summarize arg_max(TimeStamp, *) by FQDN, PropertyName
     | where Action != "Delete";
 }
-.create-or-alter function with (folder = "Consumption/Graph", docstring = "Get the edges of a graph at a specific point in time", skipvalidation = "true") Edges(pointInTime:datetime, interestingProperties:dynamic=dynamic([])) {
+.create-or-alter function with (folder = "Consumption/Graph", docstring = "Get the edges of a graph at a specific point in time", skipvalidation = "true") Edges(pointInTime:datetime, interestingTenants:dynamic = dynamic([]), interestingProperties:dynamic=dynamic([])) {
     edgeEventsSilver
     | where TimeStamp < pointInTime
+    | where TenantId in (interestingTenants) or array_length(interestingTenants) == 0
     | summarize arg_max(TimeStamp, *) by FQDN
     | where Action != "Delete"
     | join kind=leftouter (
-        EdgeProperties(pointInTime)
+        EdgeProperties(pointInTime, interestingTenants)
         | where PropertyName in (interestingProperties) or array_length(interestingProperties) == 0
         | extend p = bag_pack(PropertyName, PropertyValue)
         | summarize Properties = make_bag(p) by FQDN
     ) on FQDN
     | project EdgeType, Action, TimeStamp, Labels, Properties, SourceFQDN, TargetFQDN, TenantId, FQDN
 } 
-.create-or-alter function with (folder = "Consumption/Graph", docstring = "Get the last known state of edges of a graph", skipvalidation = "true") EdgesLKV(interestingProperties:dynamic=dynamic([])) {
-    edgeEventsGold
+.create-or-alter function with (folder = "Consumption/Graph", docstring = "Get the last known state of edges of a graph", skipvalidation = "true") EdgesLKV(interestingTenants:dynamic = dynamic([]), interestingProperties:dynamic=dynamic([])) {
+    edgeEventsGold(interestingTenants)
     | join kind=leftouter (
-        edgePropertyEventsGold
+        edgePropertyEventsGold(interestingTenants)
         | where PropertyName in (interestingProperties) or array_length(interestingProperties) == 0
         | extend p = bag_pack(PropertyName, PropertyValue)
         | summarize Properties = make_bag(p) by FQDN
     ) on FQDN
     | project EdgeType, Action, TimeStamp, Labels, Properties, SourceFQDN, TargetFQDN, TenantId, FQDN
 } 
-.create-or-alter function with (folder = "Consumption/Graph", docstring = "Get the node properties at a specific point in time", skipvalidation = "true") NodeProperties(pointInTime:datetime) {
+.create-or-alter function with (folder = "Consumption/Graph", docstring = "Get the node properties at a specific point in time", skipvalidation = "true") NodeProperties(pointInTime:datetime, interestingTenants:dynamic = dynamic([])) {
  nodePropertyEventsSilver
     | where TimeStamp < pointInTime
+    | where TenantId in (interestingTenants) or array_length(interestingTenants) == 0
     | summarize arg_max(TimeStamp, *) by FQDN, PropertyName
     | where Action != "Delete"
 }
-.create-or-alter function with (folder = "Consumption/Graph", docstring = "Get the nodes of a graph at a specific point in time", skipvalidation = "true") Nodes(pointInTime:datetime, interestingProperties:dynamic=dynamic([])) {
+.create-or-alter function with (folder = "Consumption/Graph", docstring = "Get the nodes of a graph at a specific point in time", skipvalidation = "true") Nodes(pointInTime:datetime, interestingTenants:dynamic = dynamic([]), interestingProperties:dynamic=dynamic([])) {
     nodeEventsSilver
     | where TimeStamp < pointInTime
+    | where TenantId in (interestingTenants) or array_length(interestingTenants) == 0
     | summarize arg_max(TimeStamp, *) by FQDN
     | where Action != "Delete"
     | join kind=leftouter (
-        NodeProperties(pointInTime)
+        NodeProperties(pointInTime, interestingTenants)
         | where PropertyName in (interestingProperties) or array_length(interestingProperties) == 0
         | extend p = bag_pack(PropertyName, PropertyValue)
         | summarize Properties = make_bag(p) by FQDN
     ) on FQDN
     | project NodeType, NodeId, Action, TimeStamp, Labels, Properties, TenantId, FQDN
 } 
-.create-or-alter function with (folder = "Consumption/Graph", docstring = "Get the last known state of nodes of a graph", skipvalidation = "true") NodesLKV(interestingProperties:dynamic=dynamic([])) {
-    nodeEventsGold
+.create-or-alter function with (folder = "Consumption/Graph", docstring = "Get the last known state of nodes of a graph", skipvalidation = "true") NodesLKV(interestingTenants:dynamic = dynamic([]), interestingProperties:dynamic=dynamic([])) {
+    nodeEventsGold(interestingTenants)
     | join kind=leftouter (
-        nodePropertyEventsGold
+        nodePropertyEventsGold(interestingTenants)
         | where PropertyName in (interestingProperties) or array_length(interestingProperties) == 0
         | extend p = bag_pack(PropertyName, PropertyValue)
         | summarize Properties = make_bag(p) by FQDN
     ) on FQDN
     | project NodeType, NodeId, Action, TimeStamp, Labels, Properties, TenantId, FQDN
 } 
-.create-or-alter function with (folder = "Consumption/Graph", docstring = "Get the graph at a specific point in time", skipvalidation = "true") Graph(pointInTime:datetime, interestingEdgeProperties:dynamic=dynamic([]), interestingNodeProperties:dynamic=dynamic([])) {
-    Edges(pointInTime, interestingEdgeProperties)
-    | make-graph SourceFQDN --> TargetFQDN with Nodes(pointInTime, interestingNodeProperties) on FQDN
+.create-or-alter function with (folder = "Consumption/Graph", docstring = "Get the graph at a specific point in time", skipvalidation = "true") Graph(pointInTime:datetime, interestingTenants:dynamic = dynamic([]), interestingEdgeProperties:dynamic=dynamic([]), interestingNodeProperties:dynamic=dynamic([])) {
+    Edges(pointInTime, interestingTenants, interestingEdgeProperties)
+    | make-graph SourceFQDN --> TargetFQDN with Nodes(pointInTime, interestingTenants, interestingNodeProperties) on FQDN
 } 
-.create-or-alter function with (folder = "Consumption/Graph", docstring = "Get the last known state of the graph", skipvalidation = "true") GraphLKV(interestingEdgeProperties:dynamic=dynamic([]), interestingNodeProperties:dynamic=dynamic([])) {
-EdgesLKV(interestingEdgeProperties)
-| make-graph SourceFQDN --> TargetFQDN with NodesLKV(interestingNodeProperties) on FQDN
+.create-or-alter function with (folder = "Consumption/Graph", docstring = "Get the last known state of the graph", skipvalidation = "true") GraphLKV(interestingTenants:dynamic = dynamic([]), interestingEdgeProperties:dynamic=dynamic([]), interestingNodeProperties:dynamic=dynamic([])) {
+EdgesLKV(interestingTenants, interestingEdgeProperties)
+| make-graph SourceFQDN --> TargetFQDN with NodesLKV(interestingTenants, interestingNodeProperties) on FQDN
 }
 
 //cleanup
