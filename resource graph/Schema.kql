@@ -1,0 +1,83 @@
+
+
+
+.show databases entities
+with (resolveDependencies = true)
+| where DatabaseName == "rg"
+| project EntityType, EntityName, Entity=strcat(EntityType, ':', EntityName), Dependencies
+| as T
+| project Entity, Dependencies
+| mv-apply Dependencies on
+(project DependsOn=strcat(Dependencies.EntityType, ':', Dependencies.EntityName), Kind=tostring(Dependencies.DependencyKind))
+| make-graph Entity-->DependsOn with (T  | project-away Dependencies) on Entity 
+
+let edges = datatable(Entity:string, DependsOn:string, Kind:string)
+[
+    "Function:edgeEventsGold", "MaterializedView:edgeEventsLKV", "reference", 
+    "Function:EdgeProperties", "Table:edgePropertyEventsSilver", "reference", 
+    "Function:edgePropertyEventsGold", "MaterializedView:edgePropertyEventsLKV", "reference", 
+    "Function:Edges", "Function:EdgeProperties", "reference", 
+    "Function:Edges", "Table:edgeEventsSilver", "reference", 
+    "Function:EdgesLKV", "Function:edgeEventsGold", "reference", 
+    "Function:EdgesLKV", "Function:edgePropertyEventsGold", "reference", 
+    "Function:Graph", "Function:Edges", "reference", 
+    "Function:Graph", "Function:Nodes", "reference",
+    "Function:GraphLKV", "Function:EdgesLKV", "reference", 
+    "Function:GraphLKV", "Function:NodesLKV", "reference", 
+    "Function:nodeEventsGold", "MaterializedView:nodeEventsLKV", "reference", 
+    "Function:NodeProperties", "Table:nodePropertyEventsSilver", "reference", 
+    "Function:nodePropertyEventsGold", "MaterializedView:nodePropertyEventsLKV", "reference", 
+    "Function:Nodes", "Function:NodeProperties", "reference", 
+    "Function:Nodes", "Table:nodeEventsSilver", "reference", 
+    "Function:NodesLKV", "Function:nodeEventsGold", "reference", 
+    "Function:NodesLKV", "Function:nodePropertyEventsGold", "reference", 
+    "Function:Update_EdgeEvents", "Table:edgeEvents", "reference", 
+    "Function:Update_EdgePropertyEvents", "Table:edgePropertyEvents", "reference", 
+    "Function:Update_NodeEvents", "Table:nodeEvents", "reference", 
+    "Function:Update_NodePropertyEvents", "Table:nodePropertyEvents", "reference", 
+    "MaterializedView:edgeEventsLKV", "Table:edgeEventsSilver", "definition", 
+    "MaterializedView:edgePropertyEventsLKV", "Table:edgePropertyEventsSilver", "definition", 
+    "MaterializedView:nodeEventsLKV", "Table:nodeEventsSilver", "definition", 
+    "MaterializedView:nodePropertyEventsLKV", "Table:nodePropertyEventsSilver", "definition", 
+    "Table:edgeEventsSilver", "Table:edgeEvents", "update-policy", 
+    "Table:edgeEventsSilver", "Function:Update_EdgeEvents", "update-policy", 
+    "Table:edgePropertyEventsSilver", "Table:edgePropertyEvents", "update-policy", 
+    "Table:edgePropertyEventsSilver", "Function:Update_EdgePropertyEvents", "update-policy", 
+    "Table:nodeEventsSilver", "Table:nodeEvents", "update-policy", 
+    "Table:nodeEventsSilver", "Function:Update_NodeEvents", "update-policy", 
+    "Table:nodePropertyEventsSilver", "Table:nodePropertyEvents", "update-policy", 
+    "Table:nodePropertyEventsSilver", "Function:Update_NodePropertyEvents", "update-policy", 
+];
+let nodes = datatable(EntityType:string, EntityName:string, Entity:string)
+[
+    "Table", "nodeEvents", "Table:nodeEvents", 
+    "Table", "nodeEventsSilver", "Table:nodeEventsSilver", 
+    "Table", "edgeEvents", "Table:edgeEvents", 
+    "Table", "edgeEventsSilver", "Table:edgeEventsSilver", 
+    "Table", "edgePropertyEvents", "Table:edgePropertyEvents", 
+    "Table", "edgePropertyEventsSilver", "Table:edgePropertyEventsSilver", 
+    "Table", "nodePropertyEvents", "Table:nodePropertyEvents", 
+    "Table", "nodePropertyEventsSilver", "Table:nodePropertyEventsSilver", 
+    "MaterializedView", "nodeEventsLKV", "MaterializedView:nodeEventsLKV", 
+    "MaterializedView", "edgeEventsLKV", "MaterializedView:edgeEventsLKV", 
+    "MaterializedView", "edgePropertyEventsLKV", "MaterializedView:edgePropertyEventsLKV", 
+    "MaterializedView", "nodePropertyEventsLKV", "MaterializedView:nodePropertyEventsLKV", 
+    "Function", "Update_NodeEvents", "Function:Update_NodeEvents", 
+    "Function", "nodeEventsGold", "Function:nodeEventsGold", 
+    "Function", "Update_EdgeEvents", "Function:Update_EdgeEvents", 
+    "Function", "edgeEventsGold", "Function:edgeEventsGold", 
+    "Function", "Update_EdgePropertyEvents", "Function:Update_EdgePropertyEvents", 
+    "Function", "edgePropertyEventsGold", "Function:edgePropertyEventsGold", 
+    "Function", "Update_NodePropertyEvents", "Function:Update_NodePropertyEvents", 
+    "Function", "nodePropertyEventsGold", "Function:nodePropertyEventsGold", 
+    "Function", "EdgeProperties", "Function:EdgeProperties", 
+    "Function", "Edges", "Function:Edges", 
+    "Function", "EdgesLKV", "Function:EdgesLKV", 
+    "Function", "NodeProperties", "Function:NodeProperties", 
+    "Function", "Nodes", "Function:Nodes", 
+    "Function", "NodesLKV", "Function:NodesLKV", 
+    "Function", "Graph", "Function:Graph", 
+    "Function", "GraphLKV", "Function:GraphLKV", 
+];
+edges
+| make-graph Entity --> DependsOn with nodes on Entity
