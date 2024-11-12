@@ -1,35 +1,25 @@
-# Digital Twins and Historizing Graph Changes to Kusto
+# Building a resource graph using Kusto Graph Semantics
 
-Digital twins are virtual representations of physical objects or systems. They provide a way to model and simulate real-world entities, enabling organizations to gain insights and optimize their operations. One of the key challenges in managing digital twins is capturing and analyzing the changes that occur over time.
+A resource graph allows you to explore and query your resources at scale using a powerful query language. It helps you gain insights into your resource inventory, track changes, and perform complex queries to support governance, management, and security scenarios. This service is particularly useful for large environments where manual management and querying would be time-consuming and error-prone. Additionally, a resource graph is an activity graph that gets constantly updated as resources change over time.
 
-To effectively analyze timeseries data based on the graph representation of digital twins, it is crucial to historize the changes in the graph to a data storage and analytics platform like Kusto. Kusto, also known as Azure Data Explorer, is a fast and highly scalable data exploration service that enables real-time analysis of large volumes of data.
+Managing authorization and permissions on assets tracked by a resource graph is crucial for ensuring security and proper access control. Permissions can be managed by assigning them to a group or an identity. Identities can be part of a group, and groups can be nested within other groups, allowing for flexible and scalable permission management. This hierarchical structure enables administrators to efficiently manage access rights and ensure that only authorized users can interact with specific resources.
 
-By historizing the changes in the graph to Kusto, organizations can:
+Kusto Graph Semantics is optimized for activity graphs, which represent dynamic systems where entities and their relationships change over time. The resource graph scenario focuses on the exploration and querying of resources at scale.
 
-1. **Track and analyze historical trends**: Storing the changes in the graph to Kusto allows organizations to track and analyze historical trends in the behavior of digital twins. This can provide valuable insights into the performance, maintenance, and optimization of physical assets.
+**Use Cases of a Resource Graph**
 
-2. **Perform time-based analysis**: With the historized graph data in Kusto, organizations can perform time-based analysis to understand how the state of digital twins evolves over time. This can help identify patterns, anomalies, and correlations that can drive informed decision-making.
+- **Inventory Management**: Quickly gain insights into your resource inventory across multiple environments.
+- **Change Tracking**: Track changes to resources over time to support governance and compliance.
+- **Complex Queries**: Perform complex queries to analyze resource information and support security scenarios.
+- **Access Control**: Manage permissions efficiently using group-based permissions to enhance security.
 
-3. **Enable predictive analytics**: By combining the historized graph data with other relevant data sources, organizations can leverage predictive analytics techniques to forecast future behavior and performance of digital twins. This can enable proactive maintenance, resource allocation, and optimization strategies.
+By following the guidelines and examples provided, organizations can harness the power of Kusto to gain valuable insights into their resource inventory, track changes, and perform complex queries to support governance, management, and security scenarios.
 
-To historize the changes in the graph to Kusto, organizations can leverage various techniques such as event sourcing, change data capture, or periodic snapshots. The choice of technique depends on factors like the complexity of the graph, the frequency of changes, and the desired granularity of historization.
+## Getting data
 
-## Setup an Azure Digital Twins service and configure data historization
+To get data for a resource graph, you can use services like Azure Resource Graph to query resource changes. Refer to the [documentation on how to get resource changes](https://learn.microsoft.com/azure/governance/resource-graph/changes/get-resource-changes) for more details.
 
-[Azure Digital Twins](https://learn.microsoft.com/azure/digital-twins/) is a cloud-based service provided by Microsoft. It allows developers to model the relationships and interactions between various entities within these environments, such as devices, sensors, and people.
-
-To configure Azure Digital Twins for data historization, you need to follow these steps
-
-- [Create the Azure Digital Twins instance](https://learn.microsoft.com/azure/digital-twins/how-to-set-up-instance-portal).
-- [Setup Data history](https://learn.microsoft.com/azure/digital-twins/concepts-data-history).
-
-In order to ensure that the subsequent data definition language constructs work well, consider using the following table names during the setup of the data history feature in Azure Digital Twins:
-
-- Twin property updates: **AdtPropertyEvents**
-- Twin lifecycle events: **AdtTwinLifecycleEvents**
-- Relationship lifecycle events: **AdtRelationshipLifecycleEvents**
-
-## Create the entities to work with the data historized in Kusto
+## Create entities
 
 Once the Azure Digital Twins service is set up and the data historization is configured, organizations need to create the necessary entities in Kusto to work with the historized data. This includes creating tables, materialized views, and functions that will be used for querying and analyzing the historized graph data. The complete script to create all entities required can be found in the [DDL](DDL.kql) file.
 
@@ -51,10 +41,10 @@ To get the last known state of the **twin property updates** one can create a de
 ```kusto
 // Create a materialized view that contains the latest record for each TwinId property
 .create materialized-view with (backfill = true) AdtTwinPropertyEventsDedup on table AdtPropertyEvents {
-    AdtPropertyEvents
-    | where isempty(RelationshipId)
-    | project-away RelationshipTarget, RelationshipId
-    | summarize arg_max(TimeStamp, *) by Id, ModelId, Key
+	AdtPropertyEvents
+	| where isempty(RelationshipId)
+	| project-away RelationshipTarget, RelationshipId
+	| summarize arg_max(TimeStamp, *) by Id, ModelId, Key
 }
 
 // Create a function that returns the latest record for each TwinId property where Action is not "Delete"
@@ -66,10 +56,10 @@ AdtTwinPropertyEventsDedup
 // Create a function that returns the latest record for each TwinId property where Action is not "Delete" for a certain point in time
 .create-or-alter function TwinProperties (pointInTime:datetime) {
  AdtPropertyEvents
-    | where isempty(RelationshipId) and TimeStamp < pointInTime
-    | project-away RelationshipTarget, RelationshipId
-    | summarize arg_max(TimeStamp, *) by Id, ModelId, Key
-    | where Action != "Delete"
+	| where isempty(RelationshipId) and TimeStamp < pointInTime
+	| project-away RelationshipTarget, RelationshipId
+	| summarize arg_max(TimeStamp, *) by Id, ModelId, Key
+	| where Action != "Delete"
 }
 ```
 
@@ -80,30 +70,30 @@ As described in the [graph semantics documentation](https://learn.microsoft.com/
 ```kusto
 // Create a function that returns the edges for a certain point in time
 .create-or-alter function with (skipvalidation = "true") Edges (pointInTime:datetime, interestingProperties: dynamic = dynamic([])) {
-    AdtRelationshipLifecycleEvents
-    | where TimeStamp < pointInTime
-    | summarize arg_max(TimeStamp, *) by RelationshipId
-    | where Action != "Delete"
-    | join kind=leftouter (
-        EdgeProperties(pointInTime)
-        | where Key in (interestingProperties) or array_length(interestingProperties) == 0
-        | extend p = bag_pack(Key, Value)
-        | summarize Properties = make_bag(p) by RelationshipId
-    ) on RelationshipId
-    | project-away RelationshipId1
+	AdtRelationshipLifecycleEvents
+	| where TimeStamp < pointInTime
+	| summarize arg_max(TimeStamp, *) by RelationshipId
+	| where Action != "Delete"
+	| join kind=leftouter (
+		EdgeProperties(pointInTime)
+		| where Key in (interestingProperties) or array_length(interestingProperties) == 0
+		| extend p = bag_pack(Key, Value)
+		| summarize Properties = make_bag(p) by RelationshipId
+	) on RelationshipId
+	| project-away RelationshipId1
 }
 
 // Create a function that returns the latest record for each RelationshipId where Action is not "Delete"
 .create-or-alter function EdgesLKV (interestingProperties: dynamic = dynamic([])) {
-    AdtRelationshipLifecycleEventsDedup
-    | where Action != "Delete"
-    | join kind=leftouter (
-        EdgePropertiesLKV
-        | where Key in (interestingProperties) or array_length(interestingProperties) == 0
-        | extend p = bag_pack(Key, Value)
-        | summarize Properties = make_bag(p) by RelationshipId
-    ) on RelationshipId
-    | project-away RelationshipId1
+	AdtRelationshipLifecycleEventsDedup
+	| where Action != "Delete"
+	| join kind=leftouter (
+		EdgePropertiesLKV
+		| where Key in (interestingProperties) or array_length(interestingProperties) == 0
+		| extend p = bag_pack(Key, Value)
+		| summarize Properties = make_bag(p) by RelationshipId
+	) on RelationshipId
+	| project-away RelationshipId1
 }
 ```
 
@@ -118,8 +108,8 @@ EdgesLKV(interestingEdgeProperties)
 
 // Create a function that returns a graph for a certain point in time
 .create-or-alter function with (skipvalidation = "true") Graph (pointInTime:datetime, interestingEdgeProperties: dynamic = dynamic([]), interestingNodeProperties: dynamic = dynamic([])) {
-    Edges(pointInTime, interestingEdgeProperties)
-    | make-graph Source --> Target with Nodes(pointInTime, interestingNodeProperties) on TwinId
+	Edges(pointInTime, interestingEdgeProperties)
+	| make-graph Source --> Target with Nodes(pointInTime, interestingNodeProperties) on TwinId
 }
 ```
 
@@ -185,8 +175,8 @@ In conclusion, historizing the changes in the graph representation of digital tw
 // Rooted Query (Given a random TwinId, retrieve ID + all properties of all twins exactly 5 hops away)
 GraphLKV()
 | graph-match cycles=none (n1)-[e*5..5]-(n2)
-    where n1.TwinId == "site-1"
-    project n2.TwinId, n2.Properties
+	where n1.TwinId == "site-1"
+	project n2.TwinId, n2.Properties
 ```
 
 |n2_TwinId|n2_Properties|
@@ -201,8 +191,8 @@ GraphLKV()
 let interestingProperties = dynamic(["function"]);
 GraphLKV(interestingProperties)
 | graph-match cycles=none (n1)-[e*1..5]-(n2)    
-    where tostring(n1.Properties.function) == tostring(n2.Properties.function) and isnotempty(n1.Properties.function)
-    project n1.TwinId, n2.TwinId
+	where tostring(n1.Properties.function) == tostring(n2.Properties.function) and isnotempty(n1.Properties.function)
+	project n1.TwinId, n2.TwinId
 ```
 
 |n1_TwinId|n2_TwinId|
@@ -218,11 +208,11 @@ GraphLKV(interestingProperties)
 ```kusto
 GraphLKV()
 | graph-match (occupancy)-->(desk)-->(room)
-    where 
-        occupancy.ModelId == "dtmi:com:bosch:bt:foundation:point:MultiStateDataPoint;2" and 
-        occupancy.Properties.status != "occupied" and
-        room.ModelId == "dtmi:com:bosch:bt:foundation:space:Space;2" 
-    project desk = desk.TwinId, room = room.TwinId
+	where 
+		occupancy.ModelId == "dtmi:com:bosch:bt:foundation:point:MultiStateDataPoint;2" and 
+		occupancy.Properties.status != "occupied" and
+		room.ModelId == "dtmi:com:bosch:bt:foundation:space:Space;2" 
+	project desk = desk.TwinId, room = room.TwinId
 | summarize count() by room
 ```
 
@@ -234,8 +224,8 @@ GraphLKV()
 ```kusto
 GraphLKV()
 | graph-match (occupancy)-->(desk)-->(room)
-    where occupancy.ModelId == "dtmi:com:bosch:bt:foundation:point:MultiStateDataPoint;2" and room.ModelId == "dtmi:com:bosch:bt:foundation:space:Space;2"
-    project occupied = tostring(occupancy.Properties.status), room = room.TwinId
+	where occupancy.ModelId == "dtmi:com:bosch:bt:foundation:point:MultiStateDataPoint;2" and room.ModelId == "dtmi:com:bosch:bt:foundation:space:Space;2"
+	project occupied = tostring(occupancy.Properties.status), room = room.TwinId
 | summarize occupancy = round(dcount(occupied == "occoupied") / toreal(count()),2) by room
 ```
 
@@ -249,9 +239,9 @@ GraphLKV()
 // Star-pattern: where are rooms with empty desks and christian is located in that room
 GraphLKV()
 | graph-match (alice)-[e*1..5]-(room)<--(desk)<--(occupancy),(bob)-->(room)
-    where alice.TwinId == "Alice" and occupancy.Properties.status != "occupied" and occupancy.ModelId == "dtmi:com:bosch:bt:foundation:point:MultiStateDataPoint;2" and 
-    bob.TwinId == "Bob"
-    project desk = desk.TwinId, room = room.TwinId
+	where alice.TwinId == "Alice" and occupancy.Properties.status != "occupied" and occupancy.ModelId == "dtmi:com:bosch:bt:foundation:point:MultiStateDataPoint;2" and 
+	bob.TwinId == "Bob"
+	project desk = desk.TwinId, room = room.TwinId
 | summarize count() by room
 ```
 
