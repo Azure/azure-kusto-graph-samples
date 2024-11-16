@@ -23,22 +23,6 @@
 ```
 .create  materialized-view  nodeEventsLKV on table nodeEventsSilver { nodeEventsSilver
 | summarize arg_max(TimeStamp, *) by FQDN }
-.set-or-replace nodeEvents <|
-datatable(Action:string, TimeStamp:datetime, TenantId:string, NodeType:string, NodeId:string, Labels:dynamic)
-[
-    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "Group", "Dev", dynamic([]), 
-    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "Group", "Ops", dynamic([]), 
-    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "User", "Alice", dynamic([]), 
-    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "User", "Bob", dynamic([]), 
-    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "ManagementGroup", "MG1", dynamic([]), 
-    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "Subscription", "Sub1", dynamic([]), 
-    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "Subscription", "Sub2", dynamic([]), 
-    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "ResourceGroup", "RG1", dynamic([]), 
-    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "ResourceGroup", "RG2", dynamic([]), 
-    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "VirtualMachine", "VM1", dynamic([]), 
-    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "VirtualMachine", "VM2", dynamic([]), 
-    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "Application", "APP", dynamic([]), 
-]
 .create function ifnotexists with (folder="Consumption/Events") nodeEventsGold (interestingTenants:dynamic = dynamic([])) {
     nodeEventsLKV
     | where TenantId in (interestingTenants) or array_length(interestingTenants) == 0
@@ -68,24 +52,6 @@ edgeEvents
 ```
 .create  materialized-view  edgeEventsLKV on table edgeEventsSilver { edgeEventsSilver
 | summarize arg_max(TimeStamp, *) by FQDN }
-.set-or-replace edgeEvents <|
-datatable(Action:string, TimeStamp:datetime, TenantId:string, EdgeType:string, SourceTenantId:string, SourceNodeType:string, SourceNodeId:string, TargetTenantId:string, TargetNodeType:string, TargetNodeId:string, Labels:dynamic)
-[
-    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "has_member", "Contoso", "Group", "Dev", "Contoso", "Group", "Ops", dynamic([]), 
-    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "has_member", "Contoso", "Group", "Ops", "Contoso", "User", "Alice", dynamic([]), 
-    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "has_member", "Contoso", "Group", "Dev", "Contoso", "User", "Bob", dynamic([]), 
-    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "contains_resource", "Contoso", "ManagementGroup", "MG1", "Contoso", "Subscription", "Sub1", dynamic([]), 
-    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "contains_resource", "Contoso", "ManagementGroup", "MG1", "Contoso", "Subscription", "Sub2", dynamic([]), 
-    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "contains_resource", "Contoso", "Subscription", "Sub1", "Contoso", "ResourceGroup", "RG1", dynamic([]), 
-    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "contains_resource", "Contoso", "Subscription", "Sub2", "Contoso", "ResourceGroup", "RG2", dynamic([]), 
-    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "contains_resource", "Contoso", "ResourceGroup", "RG1", "Contoso", "VirtualMachine", "VM1", dynamic([]), 
-    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "contains_resource", "Contoso", "ResourceGroup", "RG2", "Contoso", "VirtualMachine", "VM2", dynamic([]), 
-    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "contains_resource", "Contoso", "ResourceGroup", "RG2", "Contoso", "Application", "APP", dynamic([]),
-    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "depends_on", "Contoso", "Application", "APP", "Contoso", "VirtualMachine", "VM2", dynamic([]), 
-    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "authorized_on", "Contoso", "Group", "Dev", "Contoso", "ManagementGroup", "MG1", dynamic(["Reader"]), 
-    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "authorized_on", "Contoso", "Group", "Ops", "Contoso", "Subscription", "Sub2", dynamic(["Owner"]), 
-    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "authorized_on", "Contoso", "User", "Bob", "Contoso", "VirtualMachine", "VM1", dynamic(["Reader"]), 
-]
 .create function ifnotexists with (folder="Consumption/Events") edgeEventsGold (interestingTenants:dynamic = dynamic([])) {
     edgeEventsLKV
     | where TenantId in (interestingTenants) or array_length(interestingTenants) == 0
@@ -115,11 +81,6 @@ edgePropertyEvents
 ```
 .create  materialized-view  edgePropertyEventsLKV on table edgePropertyEventsSilver { edgePropertyEventsSilver
 | summarize arg_max(TimeStamp, *) by FQDN }
-.set-or-replace edgePropertyEvents <|
-datatable(Action:string, TimeStamp:datetime, TenantId:string, EdgeType:string, SourceTenantId:string, SourceNodeType:string, SourceNodeId:string, TargetTenantId:string, TargetNodeType:string, TargetNodeId:string, PropertyName:string, PropertyValue:dynamic)
-[
-    "Add", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "authorized_on", "Contoso", "User", "Bob", "Contoso", "VirtualMachine", "VM1", "LocationFilter", dynamic(["UK"]), 
-]
 .create function ifnotexists with (folder="Consumption/Events") edgePropertyEventsGold (interestingTenants:dynamic = dynamic([])) {
     edgePropertyEventsLKV
     | where TenantId in (interestingTenants) or array_length(interestingTenants) == 0
@@ -148,17 +109,6 @@ nodePropertyEvents
 ```
 .create  materialized-view  nodePropertyEventsLKV on table nodePropertyEventsSilver { nodePropertyEventsSilver
 | summarize arg_max(TimeStamp, *) by FQDN }
-.set-or-replace nodePropertyEvents <|
-datatable(Action:string, TimeStamp:datetime, TenantId:string, NodeType:string, NodeId:string, PropertyName:string, PropertyValue:dynamic)
-[
-    "Add", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "User", "Alice", "Age", dynamic("42"), 
-    "Add", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "User", "Alice", "Location", dynamic("UK"), 
-    "Add", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "User", "Bob", "Location", dynamic("Germany"), 
-    "Add", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "User", "VM1", "Region", dynamic("UK South"), 
-    "Add", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "User", "VM2", "Region", dynamic("West Europe"), 
-    "Add", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "User", "RG2", "Region", dynamic("West Europe"), 
-    "Add", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "User", "RG1", "Region", dynamic("UK South"), 
-]
 .create function ifnotexists with (folder="Consumption/Events") nodePropertyEventsGold (interestingTenants:dynamic = dynamic([])) {
     nodePropertyEventsLKV
     | where TenantId in (interestingTenants) or array_length(interestingTenants) == 0
@@ -234,6 +184,59 @@ edgePropertyEventsSilver
 EdgesLKV(interestingTenants, interestingEdgeProperties)
 | make-graph SourceFQDN --> TargetFQDN with NodesLKV(interestingTenants, interestingNodeProperties) on FQDN
 }
+
+//add data
+.execute script <|
+.set-or-replace nodeEvents <|
+datatable(Action:string, TimeStamp:datetime, TenantId:string, NodeType:string, NodeId:string, Labels:dynamic)
+[
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "Group", "Dev", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "Group", "Ops", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "User", "Alice", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "User", "Bob", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "ManagementGroup", "MG1", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "Subscription", "Sub1", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "Subscription", "Sub2", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "ResourceGroup", "RG1", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "ResourceGroup", "RG2", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "VirtualMachine", "VM1", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "VirtualMachine", "VM2", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "Application", "APP", dynamic([]), 
+]
+.set-or-replace edgeEvents <|
+datatable(Action:string, TimeStamp:datetime, TenantId:string, EdgeType:string, SourceTenantId:string, SourceNodeType:string, SourceNodeId:string, TargetTenantId:string, TargetNodeType:string, TargetNodeId:string, Labels:dynamic)
+[
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "has_member", "Contoso", "Group", "Dev", "Contoso", "Group", "Ops", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "has_member", "Contoso", "Group", "Ops", "Contoso", "User", "Alice", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "has_member", "Contoso", "Group", "Dev", "Contoso", "User", "Bob", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "contains_resource", "Contoso", "ManagementGroup", "MG1", "Contoso", "Subscription", "Sub1", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "contains_resource", "Contoso", "ManagementGroup", "MG1", "Contoso", "Subscription", "Sub2", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "contains_resource", "Contoso", "Subscription", "Sub1", "Contoso", "ResourceGroup", "RG1", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "contains_resource", "Contoso", "Subscription", "Sub2", "Contoso", "ResourceGroup", "RG2", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "contains_resource", "Contoso", "ResourceGroup", "RG1", "Contoso", "VirtualMachine", "VM1", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "contains_resource", "Contoso", "ResourceGroup", "RG2", "Contoso", "VirtualMachine", "VM2", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "contains_resource", "Contoso", "ResourceGroup", "RG2", "Contoso", "Application", "APP", dynamic([]),
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "depends_on", "Contoso", "Application", "APP", "Contoso", "VirtualMachine", "VM2", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "authorized_on", "Contoso", "Group", "Dev", "Contoso", "ManagementGroup", "MG1", dynamic(["Reader"]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "authorized_on", "Contoso", "Group", "Ops", "Contoso", "Subscription", "Sub2", dynamic(["Owner"]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "authorized_on", "Contoso", "User", "Bob", "Contoso", "VirtualMachine", "VM1", dynamic(["Reader"]), 
+]
+.set-or-replace edgePropertyEvents <|
+datatable(Action:string, TimeStamp:datetime, TenantId:string, EdgeType:string, SourceTenantId:string, SourceNodeType:string, SourceNodeId:string, TargetTenantId:string, TargetNodeType:string, TargetNodeId:string, PropertyName:string, PropertyValue:dynamic)
+[
+    "Add", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "authorized_on", "Contoso", "User", "Bob", "Contoso", "VirtualMachine", "VM1", "LocationFilter", dynamic(["UK"]), 
+]
+.set-or-replace nodePropertyEvents <|
+datatable(Action:string, TimeStamp:datetime, TenantId:string, NodeType:string, NodeId:string, PropertyName:string, PropertyValue:dynamic)
+[
+    "Add", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "User", "Alice", "Age", dynamic("42"), 
+    "Add", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "User", "Alice", "Location", dynamic("UK"), 
+    "Add", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "User", "Bob", "Location", dynamic("Germany"), 
+    "Add", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "User", "VM1", "Region", dynamic("UK South"), 
+    "Add", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "User", "VM2", "Region", dynamic("West Europe"), 
+    "Add", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "User", "RG2", "Region", dynamic("West Europe"), 
+    "Add", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "User", "RG1", "Region", dynamic("UK South"), 
+]
 
 //cleanup
 .execute script <|

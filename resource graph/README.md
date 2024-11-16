@@ -21,19 +21,33 @@ To get data for a resource graph, you can use services like Azure Resource Graph
 
 ## Create entities
 
-![Schema of the resource graph](media/schema.png "Resource Graph Schema")
+Kraph allows users to build activity graphs. So all the entities are created with that in mind. The following examples are for the nodes of the graph. The other structural components for edges and properties are build in a similar way and can be found in the [DDL](DDL.kql) file.
+
+The node events table is capturing events for nodes and consists of the following columns:
+
+- Action: Reflects the lifecycle of nodes. In most cases it will be either Create / Delete / Update.
+- TimeStamp: Mandatory for all activity tables. It shows when a certain event happened
+- TenantId: The tenant of the node.
+- NodeType: The type of the node (VM, User, ...).
+- Labels: The labels of the node. There could be zero or more of them.
 
 ```kusto
 .create-merge table nodeEvents (Action:string, TimeStamp:datetime, TenantId:string, NodeType:string, NodeId:string, Labels:dynamic) with (folder = "Bronze", docstring = "Landing table nodes")
 ```
 
+Resource graphs require streaming ingestion to reduce the time to query the data to the absolute minimum.
+
 ```kusto  
 .alter table nodeEvents policy streamingingestion enable 
 ```
 
+In the next steps we are going to create a derived and enriched table for nodes which will be populated by the *nodeEvents* table. It's not required to keep the raw data which saves cost.
+
 ```kusto
 .alter-merge table nodeEvents policy retention softdelete = 0d recoverability = disabled
 ```
+
+The *Update_NodeEvents* function extends the *nodeEvents* table with a Fully Qualified Domain Name (FQDN) to create a unique identifier for the node.
 
 ```kusto
 .create function ifnotexists with (folder="Update") Update_NodeEvents () {
@@ -42,9 +56,13 @@ To get data for a resource graph, you can use services like Azure Resource Graph
 }
 ```
 
+The *nodeEventsSilver* table has all columns of the *nodeEvents* table and an additional *FQDN* column which is populated by the *Update_NodeEvents* function.
+
 ```kusto
 .create-merge table nodeEventsSilver (Action:string, TimeStamp:datetime, TenantId:string, NodeType:string, NodeId:string, Labels:dynamic, FQDN:string) with (folder = "Silver", docstring = "Enriched data of nodes") 
 ```
+
+This statement updates the update policy for the *nodeEventsSilver* table.
 
 ````kusto
 .alter table nodeEventsSilver policy update
@@ -61,10 +79,14 @@ To get data for a resource graph, you can use services like Azure Resource Graph
 ```
 ````
 
+Creating a materialized view is an optimization to get to the latest known state faster.
+
 ```kusto
 .create  materialized-view  nodeEventsLKV on table nodeEventsSilver { nodeEventsSilver
 | summarize arg_max(TimeStamp, *) by FQDN }
 ```
+
+After the materialized view created the last known state, we need to remove all deleted nodes.
 
 ```kusto
 .create function ifnotexists with (folder="Consumption/Events") nodeEventsGold (interestingTenants:dynamic = dynamic([])) {
@@ -73,6 +95,10 @@ To get data for a resource graph, you can use services like Azure Resource Graph
     | where Action != "Delete"
 }
 ```
+
+TODO: add graph functions
+
+![Schema of the resource graph](media/schema.png "Resource Graph Schema")
 
 ## Setup
 
