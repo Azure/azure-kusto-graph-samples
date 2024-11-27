@@ -48,46 +48,26 @@ let directAccess = view() {
 union withsource=Assignment groupBasedAccess, directAccess
 | summarize Username = take_any(Username), Tenants=dcount(resourceTenantId), ResourceTypes=dcount(resourceType), Resources=dcount(resourceName) by userFQDN, Assignment
 
-//Check Bob, who has direct and group based access to resources
+//Check Alice and Bob using zero lenth path
 let interestingUsers = dynamic(["Bob", "Alice"]);
-let G = GraphLKV();
-let groupBasedAccess = view() {
-    G
-    | graph-match (resource)<-[authorized_on*1..4]-(group)-[hasMember*1..255]->(user)
-        where user.NodeId in (interestingUsers) and user.NodeType == "User" and hasMember.EdgeType == "has_member" and group.NodeType == "Group" and
-            authorized_on.EdgeType in ("authorized_on", "contains_resource")
-        project Username=user.NodeId, userFQDN=user.FQDN, resourceTenantId=resource.TenantId, resourceType=resource.NodeType, resourceName=resource.NodeId
-};
-let directAccess = view() {
-    G
-    | graph-match (resource)<-[authorized_on*1..4]-(user)
-        where user.NodeId in (interestingUsers) and user.NodeType == "User" and
-            authorized_on.EdgeType in ("authorized_on", "contains_resource")
-        project Username=user.NodeId, userFQDN=user.FQDN, resourceTenantId=resource.TenantId, resourceType=resource.NodeType, resourceName=resource.NodeId
-};
-union withsource=Assignment groupBasedAccess, directAccess
-| summarize Username = take_any(Username), Tenants=dcount(resourceTenantId), ResourceTypes=dcount(resourceType), Resources=dcount(resourceName) by userFQDN, Assignment
+GraphLKV()
+| graph-match (resource)<-[authorized_on*0..4]-(group)-[hasMember*1..255]->(user)
+    where user.NodeId in (interestingUsers) and user.NodeType == "User" and hasMember.EdgeType == "has_member" and group.NodeType == "Group" and
+        authorized_on.EdgeType in ("authorized_on", "contains_resource")
+    project Username=user.NodeId, userFQDN=user.FQDN, resourceTenantId=resource.TenantId, resourceType=resource.NodeType, 
+        resourceName=resource.NodeId, Assignment = authorized_on.Action
+| extend Assignment = iff(array_length( Assignment) > 0, "group", "direct")
+| summarize Username = take_any(Username), Tenants=dcount(resourceTenantId), ResourceTypes=dcount(resourceType), Resources=dcount(resourceName) by Assignment, userFQDN
 
 //Provide all permissions of a user on VMs
 let interestingUsers = dynamic(["Alice", "Bob"]);
 let interestingResourceTypes = dynamic(["VirtualMachine"]);
 let tenants=dynamic(["Contoso"]);
-let G = GraphLKV(interestingTenants=tenants);
-let groupBasedAccess = view() {
-    G
-    | graph-match (resource)<-[authorized_on*1..4]-(group)-[hasMember*1..255]->(user)
-        where user.NodeId in (interestingUsers) and user.NodeType == "User" and hasMember.EdgeType == "has_member" and group.NodeType == "Group" and
-            authorized_on.EdgeType in ("authorized_on", "contains_resource") and resource.NodeType in (interestingResourceTypes)
-        project Username=user.NodeId, userFQDN=user.FQDN, resourceTenantId=resource.TenantId, resourceType=resource.NodeType, resourceName=resource.NodeId, AuthorizationLabels=authorized_on.Labels
-};
-let directAccess = view() {
-    G
-    | graph-match (resource)<-[authorized_on*1..4]-(user)
-        where user.NodeId in (interestingUsers) and user.NodeType == "User" and
-            authorized_on.EdgeType in ("authorized_on", "contains_resource")
-        project Username=user.NodeId, userFQDN=user.FQDN, resourceTenantId=resource.TenantId, resourceType=resource.NodeType, resourceName=resource.NodeId, AuthorizationLabels=authorized_on.Labels
-};
-union withsource=Assignment groupBasedAccess, directAccess
+GraphLKV(interestingTenants=tenants)
+| graph-match (resource)<-[authorized_on*0..4]-(group)-[hasMember*1..255]->(user)
+    where user.NodeId in (interestingUsers) and user.NodeType == "User" and hasMember.EdgeType == "has_member" and group.NodeType == "Group" and
+        authorized_on.EdgeType in ("authorized_on", "contains_resource") and resource.NodeType in (interestingResourceTypes)
+    project Username=user.NodeId, userFQDN=user.FQDN, resourceTenantId=resource.TenantId, resourceType=resource.NodeType, resourceName=resource.NodeId, AuthorizationLabels=authorized_on.Labels
 | mv-apply AuthLabel=AuthorizationLabels on (
     where array_length(AuthLabel) > 0
 )
