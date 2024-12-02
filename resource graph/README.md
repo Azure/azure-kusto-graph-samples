@@ -19,9 +19,15 @@ By following the guidelines and examples provided, organizations can harness the
 
 To get data for a resource graph, you can use services like Azure Resource Graph to query resource changes. Refer to the [documentation on how to get resource changes](https://learn.microsoft.com/azure/governance/resource-graph/changes/get-resource-changes) for more details.
 
-## Create entities
+## Modelling activity graphs in Kusto
 
-Kraph allows users to build activity graphs. So all the entities are created with that in mind. The following examples are for the nodes of the graph. The other structural components for edges and properties are build in a similar way and can be found in the [DDL](DDL.kql) file.
+Kraph enables users to build dynamic activity graphs. The following image illustrates the final state after creating all entities as per this blueprint. This setup allows querying the latest known state of resource graphs, including historical states at specific points in time.
+
+![Schema of the resource graph](media/schema.png "Resource Graph Schema")
+
+### Persistence layer
+
+To represent activity graphs, we need to create schemas for Nodes and Edges, including their properties. Below is the blueprint for the nodes. Similar structures for edges and properties can be found in the [DDL](DDL.kql) file.
 
 The node events table is capturing events for nodes and consists of the following columns:
 
@@ -96,18 +102,127 @@ After the materialized view created the last known state, we need to remove all 
 }
 ```
 
-TODO: add graph functions
+Other relevant data structures include edges, node, and edge properties. They follow the same process: event streams land in a raw table, which is then updated, deduplicated, and optimized for consumption.
 
-![Schema of the resource graph](media/schema.png "Resource Graph Schema")
+### Consumption layer
 
-## Setup
+The consumption layer of the graph is driven by stored functions in Kusto. They can be found in the [DDL](DDL.kql) file.
 
-- schema
-- data
+This function retrieves edges necessary for graph creation. Users can specify the relevant point in time, tenants, and properties.
 
-## Visualize the graph
+```kusto
+.create-or-alter function with (folder = "Consumption/Graph", docstring = "Get the edges of a graph at a specific point in time", skipvalidation = "true") Edges(pointInTime:datetime, interestingTenants:dynamic = dynamic([]), interestingProperties:dynamic=dynamic([])) {
+    edgeEventsSilver
+    | where TimeStamp < pointInTime
+    | where TenantId in (interestingTenants) or array_length(interestingTenants) == 0
+    | summarize arg_max(TimeStamp, *) by FQDN
+    | where Action != "Delete"
+    | join kind=leftouter (
+        EdgeProperties(pointInTime, interestingTenants)
+        | where PropertyName in (interestingProperties) or array_length(interestingProperties) == 0
+        | extend p = bag_pack(PropertyName, PropertyValue)
+        | summarize Properties = make_bag(p) by FQDN
+    ) on FQDN
+    | project EdgeType, Action, TimeStamp, Labels, Properties, SourceFQDN, TargetFQDN, TenantId, FQDN
+}
+```
+
+The following function retrieves the last known values of edges for specific tenants. It filters edge properties by an array of interesting properties or includes all if the array is empty. Using **edgeEventsGold** (based on a materialized view) reduces latency compared to query-time arg-max computation.
+
+```kusto
+.create-or-alter function with (folder = "Consumption/Graph", docstring = "Get the last known state of edges of a graph", skipvalidation = "true") EdgesLKV(interestingTenants:dynamic = dynamic([]), interestingProperties:dynamic=dynamic([])) {
+    edgeEventsGold(interestingTenants)
+    | join kind=leftouter (
+        edgePropertyEventsGold(interestingTenants)
+        | where PropertyName in (interestingProperties) or array_length(interestingProperties) == 0
+        | extend p = bag_pack(PropertyName, PropertyValue)
+        | summarize Properties = make_bag(p) by FQDN
+    ) on FQDN
+    | project EdgeType, Action, TimeStamp, Labels, Properties, SourceFQDN, TargetFQDN, TenantId, FQDN
+}
+```
+
+The following functions follow the same model as the previous ones. One allows specifying a date, and the other is optimized for the last known state of a graph.
+
+```kusto
+.create-or-alter function with (folder = "Consumption/Graph", docstring = "Get the graph at a specific point in time", skipvalidation = "true") Graph(pointInTime:datetime, interestingTenants:dynamic = dynamic([]), interestingEdgeProperties:dynamic=dynamic([]), interestingNodeProperties:dynamic=dynamic([])) {
+    Edges(pointInTime, interestingTenants, interestingEdgeProperties)
+    | make-graph SourceFQDN --> TargetFQDN with Nodes(pointInTime, interestingTenants, interestingNodeProperties) on FQDN
+} 
+```
+
+Both functions instantiate an in-memory graph object in Kusto using the `make-graph` operator. Nodes are defined by specifying a tabular expression.
+
+```kusto
+.create-or-alter function with (folder = "Consumption/Graph", docstring = "Get the last known state of the graph", skipvalidation = "true") GraphLKV(interestingTenants:dynamic = dynamic([]), interestingEdgeProperties:dynamic=dynamic([]), interestingNodeProperties:dynamic=dynamic([])) {
+    EdgesLKV(interestingTenants, interestingEdgeProperties)
+    | make-graph SourceFQDN --> TargetFQDN with NodesLKV(interestingTenants, interestingNodeProperties) on FQDN
+}
+```
+
+## Ingesting sample data
+
+This section creates a sample resource graph. It creates a classic multi-tenant resource graph with core components such as management groups (collection of subscriptions), subscriptions and resource groups which can contain resources. Additionally it is modelling users and groups in the same graph as another resource type which does not need to reside in a resource group. This approach allows implementing the central use-cases of resource graphs as mentioned above.
 
 ![Sample resource graph (visio)](media/sampleResourceGraph.png "Sample resource graph drawn with visio")
+
+The following script, found in the [DDL](DDL.kql) file, uses a series of set-or-replace commands to ingest data into the event tables for nodes, edges, and properties. Update policies populate the derived tables, and materialized views are populated automatically.
+
+```kusto
+.execute script <|
+.set-or-replace nodeEvents <|
+datatable(Action:string, TimeStamp:datetime, TenantId:string, NodeType:string, NodeId:string, Labels:dynamic)
+[
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "Group", "Dev", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "Group", "Ops", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "User", "Alice", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "User", "Bob", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "ManagementGroup", "MG1", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "Subscription", "Sub1", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "Subscription", "Sub2", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "ResourceGroup", "RG1", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "ResourceGroup", "RG2", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "VirtualMachine", "VM1", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "VirtualMachine", "VM2", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "Application", "APP", dynamic([]), 
+]
+.set-or-replace edgeEvents <|
+datatable(Action:string, TimeStamp:datetime, TenantId:string, EdgeType:string, SourceTenantId:string, SourceNodeType:string, SourceNodeId:string, TargetTenantId:string, TargetNodeType:string, TargetNodeId:string, Labels:dynamic)
+[
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "has_member", "Contoso", "Group", "Dev", "Contoso", "Group", "Ops", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "has_member", "Contoso", "Group", "Ops", "Contoso", "User", "Alice", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "has_member", "Contoso", "Group", "Dev", "Contoso", "User", "Bob", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "contains_resource", "Contoso", "ManagementGroup", "MG1", "Contoso", "Subscription", "Sub1", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "contains_resource", "Contoso", "ManagementGroup", "MG1", "Contoso", "Subscription", "Sub2", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "contains_resource", "Contoso", "Subscription", "Sub1", "Contoso", "ResourceGroup", "RG1", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "contains_resource", "Contoso", "Subscription", "Sub2", "Contoso", "ResourceGroup", "RG2", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "contains_resource", "Contoso", "ResourceGroup", "RG1", "Contoso", "VirtualMachine", "VM1", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "contains_resource", "Contoso", "ResourceGroup", "RG2", "Contoso", "VirtualMachine", "VM2", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "contains_resource", "Contoso", "ResourceGroup", "RG2", "Contoso", "Application", "APP", dynamic([]),
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "depends_on", "Contoso", "Application", "APP", "Contoso", "VirtualMachine", "VM2", dynamic([]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "authorized_on", "Contoso", "Group", "Dev", "Contoso", "ManagementGroup", "MG1", dynamic(["Reader"]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "authorized_on", "Contoso", "Group", "Ops", "Contoso", "Subscription", "Sub2", dynamic(["Owner"]), 
+    "Create", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "authorized_on", "Contoso", "User", "Bob", "Contoso", "VirtualMachine", "VM1", dynamic(["Reader"]), 
+]
+.set-or-replace edgePropertyEvents <|
+datatable(Action:string, TimeStamp:datetime, TenantId:string, EdgeType:string, SourceTenantId:string, SourceNodeType:string, SourceNodeId:string, TargetTenantId:string, TargetNodeType:string, TargetNodeId:string, PropertyName:string, PropertyValue:dynamic)
+[
+    "Add", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "authorized_on", "Contoso", "User", "Bob", "Contoso", "VirtualMachine", "VM1", "LocationFilter", dynamic(["UK"]), 
+]
+.set-or-replace nodePropertyEvents <|
+datatable(Action:string, TimeStamp:datetime, TenantId:string, NodeType:string, NodeId:string, PropertyName:string, PropertyValue:dynamic)
+[
+    "Add", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "User", "Alice", "Age", dynamic("42"), 
+    "Add", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "User", "Alice", "Location", dynamic("UK"), 
+    "Add", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "User", "Bob", "Location", dynamic("Germany"), 
+    "Add", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "User", "VM1", "Region", dynamic("UK South"), 
+    "Add", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "User", "VM2", "Region", dynamic("West Europe"), 
+    "Add", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "User", "RG2", "Region", dynamic("West Europe"), 
+    "Add", datetime(2024-10-21T00:00:00.0000000Z), "Contoso", "User", "RG1", "Region", dynamic("UK South"), 
+]
+```
+
+## Visualize the graph
 
 ![Sample resource graph (Kusto Explorer)](media/sampleResourceGraphKE.png "Sample resource graph generated with Kusto Explorer")
 
