@@ -25,6 +25,8 @@ Kraph enables users to build dynamic activity graphs. The following image illust
 
 ![Schema of the resource graph](media/schema.png "Resource Graph Schema")
 
+Events and activities for nodes, edges, and properties are captured in dedicated tables ("Bronze" layer). These tables serve as inputs for update policies that populate derived "Silver" tables, generating unique identifiers. A materialized view then creates the last known state of nodes, edges, and properties. Stored functions in the "Gold" layer filter out deleted elements from the materialized view. The "Silver" and "Gold" layers support the consumption layer, enabling the instantiation of the latest graph state or its state at a specific point in time, optimized via materialized views.
+
 ### Persistence layer
 
 To represent activity graphs, we need to create schemas for Nodes and Edges, including their properties. Below is the blueprint for the nodes. Similar structures for edges and properties can be found in the [DDL](DDL.kql) file.
