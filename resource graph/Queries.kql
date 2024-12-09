@@ -1,22 +1,33 @@
+//Get all nodes with type "User" of the "Contoso" tenant.
 let tenants=dynamic(["Contoso"]);
 NodesLKV(interestingTenants=tenants)
+| where NodeType == "User"
 
+//Get all nodes with type "User" of all tenants, project the "Age" property only.
 let properties = dynamic(["Age"]);
 NodesLKV(interestingProperties=properties)
+| where NodeType == "User"
 
-Nodes(datetime(2024-10-22))
+//Get all nodes of all tenants on a specific point in time.
+Nodes(datetime(2024-10-20))
 
+//Get the last known state of all edges with the Label "Reader" of a resource graph.
 EdgesLKV()
-
-let properties = dynamic(["LocationFilter"]);
-Edges(datetime(2024-10-22), interestingProperties=properties)
+| where Labels has "Reader"
+| project EdgeType, Labels, Properties
 
 let tenants=dynamic(["Contoso"]);
 let nodeProperties = dynamic(["Age"]);
 let edgeProperties = dynamic(["LocationFilter"]);
 GraphLKV(interestingTenants=tenants, interestingEdgeProperties=edgeProperties, interestingNodeProperties=nodeProperties)
 
-Graph(now())
+//Get all resources of a tenant connected to a management group
+let tenants=dynamic(["Contoso"]);
+GraphLKV(interestingTenants=tenants)
+| graph-match (mg)-[e*1..10]->(resource)
+    where mg.NodeType == "ManagementGroup"
+    project nodeType = resource.NodeType
+| summarize count() by nodeType
 
 //Statistics on resource assignments
 let interestingUser = "Alice";
@@ -51,7 +62,7 @@ union withsource=Assignment groupBasedAccess, directAccess
 //Check Alice and Bob using zero lenth path
 let interestingUsers = dynamic(["Bob", "Alice"]);
 GraphLKV()
-| graph-match (resource)<-[authorized_on*0..4]-(group)-[hasMember*1..255]->(user)
+| graph-match (resource)<-[authorized_on*1..4]-(group)-[hasMember*0..255]->(user)
     where user.NodeId in (interestingUsers) and user.NodeType == "User" and hasMember.EdgeType == "has_member" and group.NodeType == "Group" and
         authorized_on.EdgeType in ("authorized_on", "contains_resource")
     project Username=user.NodeId, userFQDN=user.FQDN, resourceTenantId=resource.TenantId, resourceType=resource.NodeType, 

@@ -1,6 +1,4 @@
-
-
-
+//Render the schema as a graph
 .show databases entities
 with (resolveDependencies = true)
 | where DatabaseName == "rg"

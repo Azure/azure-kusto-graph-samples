@@ -224,32 +224,85 @@ datatable(Action:string, TimeStamp:datetime, TenantId:string, NodeType:string, N
 
 ## Visualize the graph
 
+You can visualize the graph using Kusto Explorer by running the following query in the tool:
+
+```kusto
+GraphLKV()
+```
+
+Kusto Explorer allows you to interact with and visualize data stored in Azure Data Explorer.
+
 ![Sample resource graph (Kusto Explorer)](media/sampleResourceGraphKE.png "Sample resource graph generated with Kusto Explorer")
 
 ## Common query patterns
 
+This section provides example queries that users can run on the created resource graph schema.
+
+### Testing graph entities
+
+Get all nodes with type User of the "Contoso" tenant.
+
 ```kusto
 let tenants=dynamic(["Contoso"]);
 NodesLKV(interestingTenants=tenants)
+| where NodeType == "User"
 ```
+
+**Result**
+
+|NodeType|NodeId|Action|TimeStamp|Labels|Properties|TenantId|FQDN|
+|---|---|---|---|---|---|---|---|
+|User|Alice|Create|2024-10-19 00:00:00.0000000|[]|{<br>  "Age": "42"<br>}|Contoso|Contoso-User-Alice|
+|User|Bob|Create|2024-10-19 00:00:00.0000000|[]|{<br>  "Location": "Germany"<br>}|Contoso|Contoso-User-Bob|
+
+Get all nodes with type "User" of all tenants, project the "Age" property only.
 
 ```kusto
 let properties = dynamic(["Age"]);
 NodesLKV(interestingProperties=properties)
+| where NodeType == "User"
 ```
 
+**Result**
+
+|NodeType|NodeId|Action|TimeStamp|Labels|Properties|TenantId|FQDN|
+|---|---|---|---|---|---|---|---|
+|User|Alice|Create|2024-10-19 00:00:00.0000000|[]|{<br>  "Age": "42"<br>}|Contoso|Contoso-User-Alice|
+|User|Bob|Create|2024-10-19 00:00:00.0000000|[]||Contoso|Contoso-User-Bob|
+
+Get all nodes of all tenants on a specific point in time.
+
 ```kusto
-Nodes(datetime(2024-10-22))
+Nodes(datetime(2024-10-20))
 ```
+
+**Result**
+
+|NodeType|NodeId|Action|TimeStamp|Labels|Properties|TenantId|FQDN|
+|---|---|---|---|---|---|---|---|
+|Group|Dev|Create|2024-10-19 00:00:00.0000000|[]||Contoso|Contoso-Group-Dev|
+|Group|Ops|Create|2024-10-19 00:00:00.0000000|[]||Contoso|Contoso-Group-Ops|
+|User|Alice|Create|2024-10-19 00:00:00.0000000|[]|{<br>  "Age": "42",<br>  "Location": "UK"<br>}|Contoso|Contoso-User-Alice|
+|User|Bob|Create|2024-10-19 00:00:00.0000000|[]|{<br>  "Location": "Germany"<br>}|Contoso|Contoso-User-Bob|
+
+Get the last known state of all edges with the Label "Reader" of a resource graph.
 
 ```kusto
 EdgesLKV()
+| where Labels has "Reader"
+| project EdgeType, Labels, Properties
 ```
 
-```kusto
-let properties = dynamic(["LocationFilter"]);
-Edges(datetime(2024-10-22), interestingProperties=properties)
-```
+**Result**
+
+|EdgeType|Labels|Properties|
+|---|---|---|
+|authorized_on|[<br>  "Reader"<br>]||
+|authorized_on|[<br>  "Reader"<br>]|{<br>  "LocationFilter": [<br>    "UK"<br>  ]<br>}|
+
+### Simple Graph queries
+
+Get all resources of the "Contoso" tenant with the "Age" property on nodes and the "LocationFilter" property on edges.
 
 ```kusto
 let tenants=dynamic(["Contoso"]);
@@ -259,8 +312,15 @@ GraphLKV(interestingTenants=tenants, interestingEdgeProperties=edgeProperties, i
 ```
 
 ```kusto
-Graph(now())
+let tenants=dynamic(["Contoso"]);
+GraphLKV(interestingTenants=tenants)
+| graph-match (mg)-[e*1..10]->(resource)
+    where mg.NodeType == "ManagementGroup"
+    project nodeType = resource.NodeType
+| summarize count() by nodeType
 ```
+
+### tbd
 
 ```kusto
 //Statistics on resource assignments
@@ -297,25 +357,16 @@ union withsource=Assignment groupBasedAccess, directAccess
 ```
 
 ```kusto
-//Check Bob, who has direct and group based access to resources
+//Check Alice and Bob using zero lenth path
 let interestingUsers = dynamic(["Bob", "Alice"]);
-let G = GraphLKV();
-let groupBasedAccess = view() {
-    G
-    | graph-match (resource)<-[authorized_on*1..4]-(group)-[hasMember*1..255]->(user)
-        where user.NodeId in (interestingUsers) and user.NodeType == "User" and hasMember.EdgeType == "has_member" and group.NodeType == "Group" and
-            authorized_on.EdgeType in ("authorized_on", "contains_resource")
-        project Username=user.NodeId, userFQDN=user.FQDN, resourceTenantId=resource.TenantId, resourceType=resource.NodeType, resourceName=resource.NodeId
-};
-let directAccess = view() {
-    G
-    | graph-match (resource)<-[authorized_on*1..4]-(user)
-        where user.NodeId in (interestingUsers) and user.NodeType == "User" and
-            authorized_on.EdgeType in ("authorized_on", "contains_resource")
-        project Username=user.NodeId, userFQDN=user.FQDN, resourceTenantId=resource.TenantId, resourceType=resource.NodeType, resourceName=resource.NodeId
-};
-union withsource=Assignment groupBasedAccess, directAccess
-| summarize Username = take_any(Username), Tenants=dcount(resourceTenantId), ResourceTypes=dcount(resourceType), Resources=dcount(resourceName) by userFQDN, Assignment
+GraphLKV()
+| graph-match (resource)<-[authorized_on*0..4]-(group)-[hasMember*1..255]->(user)
+    where user.NodeId in (interestingUsers) and user.NodeType == "User" and hasMember.EdgeType == "has_member" and group.NodeType == "Group" and
+        authorized_on.EdgeType in ("authorized_on", "contains_resource")
+    project Username=user.NodeId, userFQDN=user.FQDN, resourceTenantId=resource.TenantId, resourceType=resource.NodeType, 
+        resourceName=resource.NodeId, Assignment = authorized_on.Action
+| extend Assignment = iff(array_length( Assignment) > 0, "group", "direct")
+| summarize Username = take_any(Username), Tenants=dcount(resourceTenantId), ResourceTypes=dcount(resourceType), Resources=dcount(resourceName) by Assignment, userFQDN
 ```
 
 ```kusto
@@ -323,22 +374,11 @@ union withsource=Assignment groupBasedAccess, directAccess
 let interestingUsers = dynamic(["Alice", "Bob"]);
 let interestingResourceTypes = dynamic(["VirtualMachine"]);
 let tenants=dynamic(["Contoso"]);
-let G = GraphLKV(interestingTenants=tenants);
-let groupBasedAccess = view() {
-    G
-    | graph-match (resource)<-[authorized_on*1..4]-(group)-[hasMember*1..255]->(user)
-        where user.NodeId in (interestingUsers) and user.NodeType == "User" and hasMember.EdgeType == "has_member" and group.NodeType == "Group" and
-            authorized_on.EdgeType in ("authorized_on", "contains_resource") and resource.NodeType in (interestingResourceTypes)
-        project Username=user.NodeId, userFQDN=user.FQDN, resourceTenantId=resource.TenantId, resourceType=resource.NodeType, resourceName=resource.NodeId, AuthorizationLabels=authorized_on.Labels
-};
-let directAccess = view() {
-    G
-    | graph-match (resource)<-[authorized_on*1..4]-(user)
-        where user.NodeId in (interestingUsers) and user.NodeType == "User" and
-            authorized_on.EdgeType in ("authorized_on", "contains_resource")
-        project Username=user.NodeId, userFQDN=user.FQDN, resourceTenantId=resource.TenantId, resourceType=resource.NodeType, resourceName=resource.NodeId, AuthorizationLabels=authorized_on.Labels
-};
-union withsource=Assignment groupBasedAccess, directAccess
+GraphLKV(interestingTenants=tenants)
+| graph-match (resource)<-[authorized_on*0..4]-(group)-[hasMember*1..255]->(user)
+    where user.NodeId in (interestingUsers) and user.NodeType == "User" and hasMember.EdgeType == "has_member" and group.NodeType == "Group" and
+        authorized_on.EdgeType in ("authorized_on", "contains_resource") and resource.NodeType in (interestingResourceTypes)
+    project Username=user.NodeId, userFQDN=user.FQDN, resourceTenantId=resource.TenantId, resourceType=resource.NodeType, resourceName=resource.NodeId, AuthorizationLabels=authorized_on.Labels
 | mv-apply AuthLabel=AuthorizationLabels on (
     where array_length(AuthLabel) > 0
 )
