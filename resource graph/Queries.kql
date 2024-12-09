@@ -16,18 +16,19 @@ EdgesLKV()
 | where Labels has "Reader"
 | project EdgeType, Labels, Properties
 
+//Get all resources of the "Contoso" tenant with the "Age" property on nodes and the "LocationFilter" property on edges. Visualize using Kusto Explorer (https://aka.ms/ke).
 let tenants=dynamic(["Contoso"]);
 let nodeProperties = dynamic(["Age"]);
 let edgeProperties = dynamic(["LocationFilter"]);
 GraphLKV(interestingTenants=tenants, interestingEdgeProperties=edgeProperties, interestingNodeProperties=nodeProperties)
 
-//Get all resources of a tenant connected to a management group
+//Get the number of resources grouped by resource type connected to a management group.
 let tenants=dynamic(["Contoso"]);
 GraphLKV(interestingTenants=tenants)
 | graph-match (mg)-[e*1..10]->(resource)
     where mg.NodeType == "ManagementGroup"
-    project nodeType = resource.NodeType
-| summarize count() by nodeType
+    project nodeType = resource.NodeType, FQDN = resource.FQDN
+| summarize dcount(FQDN) by nodeType
 
 //Statistics on resource assignments
 let interestingUser = "Alice";

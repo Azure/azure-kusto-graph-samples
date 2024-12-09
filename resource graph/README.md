@@ -302,7 +302,7 @@ EdgesLKV()
 
 ### Simple Graph queries
 
-Get all resources of the "Contoso" tenant with the "Age" property on nodes and the "LocationFilter" property on edges.
+Get all resources of the "Contoso" tenant with the "Age" property on nodes and the "LocationFilter" property on edges. Visualize using [Kusto Explorer](https://aka.ms/ke).
 
 ```kusto
 let tenants=dynamic(["Contoso"]);
@@ -311,14 +311,29 @@ let edgeProperties = dynamic(["LocationFilter"]);
 GraphLKV(interestingTenants=tenants, interestingEdgeProperties=edgeProperties, interestingNodeProperties=nodeProperties)
 ```
 
+**Result**
+
+![Visualization of the Contoso tenant](media/visualizeContosoGraph.png "Graph visualization with "Grouped3D" layout and Dark Theme")
+
+Get the number of resources grouped by resource type connected to a management group.
+
 ```kusto
 let tenants=dynamic(["Contoso"]);
 GraphLKV(interestingTenants=tenants)
 | graph-match (mg)-[e*1..10]->(resource)
     where mg.NodeType == "ManagementGroup"
-    project nodeType = resource.NodeType
-| summarize count() by nodeType
+    project nodeType = resource.NodeType, FQDN = resource.FQDN
+| summarize dcount(FQDN) by nodeType
 ```
+
+**Result**
+
+|nodeType|dcount_FQDN|
+|---|---|
+|Subscription|2|
+|ResourceGroup|2|
+|Application|1|
+|VirtualMachine|2|
 
 ### tbd
 
