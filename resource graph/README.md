@@ -313,7 +313,7 @@ GraphLKV(interestingTenants=tenants, interestingEdgeProperties=edgeProperties, i
 
 **Result**
 
-![Visualization of the Contoso tenant](media/visualizeContosoGraph.png "Graph visualization with "Grouped3D" layout and Dark Theme")
+![Visualization of the Contoso tenant](media/visualizeContosoGraph.png "Graph visualization with Grouped3D layout and Dark Theme")
 
 Get the number of resources grouped by resource type connected to a management group.
 
@@ -335,22 +335,41 @@ GraphLKV(interestingTenants=tenants)
 |Application|1|
 |VirtualMachine|2|
 
-### tbd
+Statistics on resource assignments for "Alice" in "Contoso"
 
 ```kusto
-//Statistics on resource assignments
 let interestingUser = "Alice";
 let tenants=dynamic(["Contoso"]);
-GraphLKV(interestingTenants=tenants)
-| graph-match (resource)<-[authorized_on*1..4]-(group)-[hasMember*1..255]->(user)
-    where user.NodeId == interestingUser and user.NodeType == "User" and hasMember.EdgeType == "has_member" and group.NodeType == "Group" and
-        authorized_on.EdgeType in ("authorized_on", "contains_resource")
-    project Username=user.NodeId, userFQDN=user.FQDN, resourceTenantId=resource.TenantId, resourceType=resource.NodeType, resourceName=resource.NodeId
-| summarize Username = take_any(Username), Tenants=dcount(resourceTenantId), ResourceTypes=dcount(resourceType), Resources=dcount(resourceName) by userFQDN
+let G = GraphLKV();
+let groupBasedAccess = view() {
+    G
+    | graph-match (resource)<-[authorized_on*1..4]-(group)-[hasMember*1..255]->(user)
+        where user.NodeId == interestingUser and user.NodeType == "User" and hasMember.EdgeType == "has_member" and group.NodeType == "Group" and
+            authorized_on.EdgeType in ("authorized_on", "contains_resource")
+        project Username=user.NodeId, userFQDN=user.FQDN, resourceTenantId=resource.TenantId, resourceType=resource.NodeType, resourceName=resource.NodeId
+};
+let directAccess = view() {
+    G
+    | graph-match (resource)<-[authorized_on*1..4]-(user)
+        where user.NodeId == interestingUser and user.NodeType == "User" and
+            authorized_on.EdgeType in ("authorized_on", "contains_resource")
+        project Username=user.NodeId, userFQDN=user.FQDN, resourceTenantId=resource.TenantId, resourceType=resource.NodeType, resourceName=resource.NodeId
+};
+union groupBasedAccess, directAccess
+| summarize Username = take_any(Username), ResourceTypes=dcount(resourceType), Resources=dcount(resourceName) by userFQDN
 ```
 
+**Result**
+
+|userFQDN|Username|ResourceTypes|Resources|
+|---|---|---|---|
+|Contoso-User-Alice|Alice|5|8|
+
+### Advanced Graph queries
+
+Check Bob, who has direct and group based access to resources.
+
 ```kusto
-//Check Bob, who has direct and group based access to resources
 let interestingUser = "Bob";
 let G = GraphLKV();
 let groupBasedAccess = view() {
@@ -371,29 +390,66 @@ union withsource=Assignment groupBasedAccess, directAccess
 | summarize Username = take_any(Username), Tenants=dcount(resourceTenantId), ResourceTypes=dcount(resourceType), Resources=dcount(resourceName) by userFQDN, Assignment
 ```
 
+**Result**
+
+|userFQDN|Assignment|Username|Tenants|ResourceTypes|Resources|
+|---|---|---|---|---|---|
+|Contoso-User-Bob|directAccess|Bob|1|1|1|
+|Contoso-User-Bob|groupBasedAccess|Bob|1|5|8|
+
+Check multiple users and create a result on direct or group based access to resources
+
 ```kusto
-//Check Alice and Bob using zero lenth path
 let interestingUsers = dynamic(["Bob", "Alice"]);
-GraphLKV()
-| graph-match (resource)<-[authorized_on*0..4]-(group)-[hasMember*1..255]->(user)
-    where user.NodeId in (interestingUsers) and user.NodeType == "User" and hasMember.EdgeType == "has_member" and group.NodeType == "Group" and
-        authorized_on.EdgeType in ("authorized_on", "contains_resource")
-    project Username=user.NodeId, userFQDN=user.FQDN, resourceTenantId=resource.TenantId, resourceType=resource.NodeType, 
-        resourceName=resource.NodeId, Assignment = authorized_on.Action
-| extend Assignment = iff(array_length( Assignment) > 0, "group", "direct")
+let G = GraphLKV();
+let groupBasedAccess = view() {
+    G
+    | graph-match (resource)<-[authorized_on*1..4]-(group)-[hasMember*1..255]->(user)
+        where user.NodeId in (interestingUsers) and user.NodeType == "User" and hasMember.EdgeType == "has_member" and group.NodeType == "Group" and
+            authorized_on.EdgeType in ("authorized_on", "contains_resource")
+        project Username=user.NodeId, userFQDN=user.FQDN, resourceTenantId=resource.TenantId, resourceType=resource.NodeType, resourceName=resource.NodeId
+};
+let directAccess = view() {
+    G
+    | graph-match (resource)<-[authorized_on*1..4]-(user)
+        where user.NodeId in (interestingUsers) and user.NodeType == "User" and
+            authorized_on.EdgeType in ("authorized_on", "contains_resource")
+        project Username=user.NodeId, userFQDN=user.FQDN, resourceTenantId=resource.TenantId, resourceType=resource.NodeType, resourceName=resource.NodeId
+};
+union withsource=Assignment groupBasedAccess, directAccess
 | summarize Username = take_any(Username), Tenants=dcount(resourceTenantId), ResourceTypes=dcount(resourceType), Resources=dcount(resourceName) by Assignment, userFQDN
 ```
 
+**Result**
+
+|Assignment|userFQDN|Username|Tenants|ResourceTypes|Resources|
+|---|---|---|---|---|---|
+|directAccess|Contoso-User-Bob|Bob|1|1|1|
+|groupBasedAccess|Contoso-User-Bob|Bob|1|5|8|
+|groupBasedAccess|Contoso-User-Alice|Alice|1|5|8|
+
+Provide all permissions of a user on VMs
+
 ```kusto
-//Provide all permissions of a user on VMs
 let interestingUsers = dynamic(["Alice", "Bob"]);
 let interestingResourceTypes = dynamic(["VirtualMachine"]);
 let tenants=dynamic(["Contoso"]);
-GraphLKV(interestingTenants=tenants)
-| graph-match (resource)<-[authorized_on*0..4]-(group)-[hasMember*1..255]->(user)
-    where user.NodeId in (interestingUsers) and user.NodeType == "User" and hasMember.EdgeType == "has_member" and group.NodeType == "Group" and
+let G = GraphLKV();
+let groupBasedAccess = view() {
+    G
+    | graph-match (resource)<-[authorized_on*0..4]-(group)-[hasMember*1..255]->(user)
+        where user.NodeId in (interestingUsers) and user.NodeType == "User" and hasMember.EdgeType == "has_member" and group.NodeType == "Group" and
+            authorized_on.EdgeType in ("authorized_on", "contains_resource") and resource.NodeType in (interestingResourceTypes)
+        project Username=user.NodeId, userFQDN=user.FQDN, resourceTenantId=resource.TenantId, resourceType=resource.NodeType, resourceName=resource.NodeId, AuthorizationLabels=authorized_on.Labels
+};
+let directAccess = view() {
+    G
+    | graph-match (resource)<-[authorized_on*1..4]-(user)
+        where user.NodeId in (interestingUsers) and user.NodeType == "User" and
         authorized_on.EdgeType in ("authorized_on", "contains_resource") and resource.NodeType in (interestingResourceTypes)
     project Username=user.NodeId, userFQDN=user.FQDN, resourceTenantId=resource.TenantId, resourceType=resource.NodeType, resourceName=resource.NodeId, AuthorizationLabels=authorized_on.Labels
+};
+union withsource=Assignment groupBasedAccess, directAccess
 | mv-apply AuthLabel=AuthorizationLabels on (
     where array_length(AuthLabel) > 0
 )
@@ -401,14 +457,33 @@ GraphLKV(interestingTenants=tenants)
 | summarize Permissions=make_set(AuthLabel) by userFQDN, resourceTenantId, resourceType, resourceName
 ```
 
+**Result**
+
+|userFQDN|resourceTenantId|resourceType|resourceName|Permissions|
+|---|---|---|---|---|
+|Contoso-User-Bob|Contoso|VirtualMachine|VM1|[<br>  "Reader"<br>]|
+|Contoso-User-Bob|Contoso|VirtualMachine|VM2|[<br>  "Reader"<br>]|
+|Contoso-User-Alice|Contoso|VirtualMachine|VM2|[<br>  "Owner",<br>  "Reader"<br>]|
+|Contoso-User-Alice|Contoso|VirtualMachine|VM1|[<br>  "Reader"<br>]|
+
+![Visualization of the content of the authorized_on edge](media/authorizedOnSub2WithOwnerPermission.png "Graph visualization with Grouped layout and Dark Theme")
+
+Which user need to be notified if a specific VM is broken?
+
 ```kusto
-//Blast radius... what happens if a resource is not working? Which users are impacted?
 let interestingResourceTypes = dynamic(["VirtualMachine"]);
 let interestingResources = dynamic(["VM1"]);
 let tenants=dynamic(["Contoso"]);
 GraphLKV(interestingTenants=tenants)
 | graph-match cycles=none (resource)-[e*1..255]-(user)
     where resource.NodeId in (interestingResources) and resource.NodeType in (interestingResourceTypes) and user.NodeType == "User"
-    project Username=user.NodeId, Tenant=user.TenantId, userFQDN=user.FQDN
-| distinct userFQDN, Username, Tenant
+    project Username=user.NodeId
+| distinct Username
 ```
+
+**Result**
+
+|Username|
+|---|
+|Bob|
+|Alice|
