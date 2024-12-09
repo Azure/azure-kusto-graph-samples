@@ -2,6 +2,13 @@
 
 This repository is dedicated to showcasing the [Kusto graph semantics](https://aka.ms/kusto/graph-overview) in various segments such as Digital Twins, Security, and Dependency Tracking. It serves as a comprehensive guide for those interested in understanding and implementing these semantics in their respective fields.
 
+## Scenarios
+
+This repository includes several scenarios demonstrating the use of Kusto graph semantics:
+
+- **Digital Twins**: Explore how Kusto graph semantics can be applied to model and analyze digital twins. [Read more](digital%20twins/README.md)
+- **Resource Graph**: Learn how to leverage Kusto graph semantics for resource graph use cases. [Read more](./resource%20graph/README.md)
+
 ## Contributing
 
 This project welcomes contributions and suggestions.  Most contributions require you to agree to a
