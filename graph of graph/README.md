@@ -82,6 +82,7 @@ These functions provide rich analytical capabilities, allowing security analysts
 ### Graph Query Composition
 
 What makes "Graph of Graph" powerful is the ability to compose queries across multiple graph domains:
+
 - Results from one graph query can be used as constraints in another graph query
 - Multiple graph queries can be executed in sequence, building upon each other's results
 - Graph functions can be combined to create highly specific pattern matching conditions
@@ -582,6 +583,60 @@ This approach combines the power of vector operations with graph traversal to id
 
 To fully demonstrate the power of combining "Graph of Graph" with other KQL capabilities, let's integrate all these techniques in a comprehensive security monitoring scenario ([full example](puttingItAllTogether.kql)):
 
+The following picture shows the overall data sources and graph structure.
+
+```
++----------------+      +----------------+      +----------------+
+|                |      |                |      |                |
+| IDENTITY GRAPH |      | NETWORK GRAPH  |      | RESOURCE DATA  |
+|                |      |                |      |                |
++-------+--------+      +-------+--------+      +-------+--------+
+        |                       |                       |
+        v                       v                       v
++-------+--------+      +-------+--------+      +-------+--------+
+| Users & Groups |      | Devices &      |      | Resources &    |
+| Relationships  |      | Connections    |      | Access Events  |
++-------+--------+      +-------+--------+      +-------+--------+
+        |                       |                       |
+        +----------+------------+-----------+-----------+
+                   |                        |
+                   v                        v
+           +-------+---------+     +--------+--------+
+           |                 |     |                 |
+           | Auth Logs       |     | Network Flows   |
+           | Time Series     |     | Vector Analysis |
+           |                 |     |                 |
+           +-------+---------+     +--------+--------+
+                   |                        |
+                   v                        v
+           +-------+---------+     +--------+--------+
+           |                 |     |                 |
+           | Anomaly         |     | Flow            |
+           | Detection       |     | Anomalies (KNN) |
+           |                 |     |                 |
+           +-------+---------+     +--------+--------+
+                   |                        |
+                   +------------+-----------+
+                                |
+                                v
+                      +---------+---------+
+                      |                   |
+                      | Attack Sequence   |
+                      | Correlation       |
+                      |                   |
+                      +---------+---------+
+                                |
+                                v
+                      +---------+---------+
+                      |                   |
+                      | Graph of Graph    |
+                      | Attack Analysis   |
+                      |                   |
+                      +---------+---------+
+```
+
+Now let's look at the actual structure of the query.
+
 ```kusto
 // 1. IDENTITY GRAPH - Users and permissions
 let IdentityGraph = IdentityEdges
@@ -729,6 +784,48 @@ SuspiciousAccess
 |CompromisedUser|AuthAnomalyDevice|NetworkPivot|SensitiveResourceAccessed|AccessType|AttackTimelineSeries|TotalAttackDurationMinutes|PotentialDataExfiltration|
 |---|---|---|---|---|---|---|---|
 |User1|Device3|Device4|CustomerRecords|Write|{<br>  "accessTime": "2025-04-15T03:40:00.0000000Z",<br>  "AuthTime": "2025-04-15T03:30:00.0000000Z",<br>  "FlowTime": "2025-04-15T03:35:00.0000000Z"<br>}|10|True|
+
+ The following picture shows the attack path detected in the example: User1's anomalous authentication to Device3, followed by suspicious network flow to Device4, and culminating in unauthorized write access to CustomerRecords - all happening within a 10-minute timeframe.
+
+```
+                                 ATTACK PATH DETECTION WORKFLOW
+                                 
+   +-------------+                                               +--------------+
+   |             | 1. Anomalous Auth                             |              |
+   |   User1     +---------------------------------------------->|   Device3    |
+   |             | (3:30 AM, score 0.95)                         |              |
+   +-------------+                                               +------+-------+
+                                                                        |
+                                                                        | 2. Suspicious
+                                                                        | Network Flow
+                                                                        | (3:35 AM, 50000 bytes)
+                                                                        |
+                                                                        v
+  +-------------+                                               +-------+------+
+  |             |                                               |              |
+  |   Group1    |                                               |   Device4    |
+  | SecurityGrp |                                               |              |
+  +------+------+                                               +------+-------+
+         |                                                             |
+         |                                                             | 3. Sensitive
+         |                        Unauthorized Access Path             | Resource Access
+         |                        ====================                 | (3:40 AM, "Write")
+         v                                                             v
+  +------+--------------------------------------------+      +--------+-------+
+  |                                                   |      |                |
+  |                 CustomerRecords                   |<-----+                |
+  |                                                   |      | Data           |
+  +---------------------------------------------------+      | Exfiltration   |
+                                                             |                |
+                                                             +----------------+
+
+TIMELINE:                                              DETECTION METHODS:
+========                                               ================
+3:30 AM: Anomalous Authentication                      - Auth Anomaly Score > 0.9
+3:35 AM: Suspicious Network Flow                       - Vector Embedding KNN Distance > 0.5  
+3:40 AM: Sensitive Resource Access                     - Graph Traversal for Access Paths
+Total Attack Duration: 10 minutes                      - Temporal Correlation (Events within 10 min)
+```
 
 This comprehensive example demonstrates the true power of "Graph of Graph" when combined with other KQL capabilities:
 
