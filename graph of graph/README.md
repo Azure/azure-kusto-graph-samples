@@ -94,6 +94,29 @@ Consider a scenario where an organization wants to detect sophisticated attacker
 
 Let's model this scenario with KQL graph semantics ([full example](advancedPersistentThreadDetection.kql)):
 
+```
+    +-------------+  Failed   +-------------+           +-------------+
+    |             | Attempts  |             |           |             |
+    |    User1    +---------->+   Device2   +---------->+   Device3   |
+    |             |           |             |           |             |
+    +------+------+           +------+------+           +------+------+
+           |                         ^                         |
+           | Auth                    |                         | Access
+           v                         |                         v
+    +-------------+                  |                  +-------------+
+    |             |                  |                  |             |
+    |   Device1   +------------------+                  |  Resource1  |
+    |             |    RDP (Rare)                       | (Sensitive) |
+    +------+------+                                     +-------------+
+           |                                                   ^
+           |                                                   |
+           |                                                   |
+           +---------------------------------------------------+
+                              Direct Access
+
+                Advanced Persistent Threat Detection Scenario
+```
+
 ```kusto
 // 1. IDENTITY GRAPH - Users, groups and permissions
 let IdentityNodes = datatable(id:string, type:string, properties:dynamic)
@@ -320,6 +343,27 @@ While the "Graph of Graph" pattern is powerful on its own, its true potential em
 
 One of the most powerful integrations is combining graph analysis with time series analytics. Consider a scenario where we need to analyze authentication anomalies in the context of a user privilege graph ([full example](timeseriesAndGraph.kql)):
 
+```
+    +---------+                                  +--------------+
+    |         |  Unusual Login (3am Bangkok)     |              |
+    | User002 +--------------------------------->+ Group002     |
+    |         |  Normal: 9am-6pm Seattle         |              |
+    +---------+                                  +------+-------+
+                                                        |
+                                                        |
+                                                        |
+                                                        |
+                                                        v
+                                                 +--------------+
+                                                 |              |
+                                                 | Resource001  |
+                                                 | (Database)   |
+                                                 |              |
+                                                 +--------------+
+
+                         Time Series and Graph Scenario
+```
+
 ```kusto
 // 1. Define the identity graph with users and their privileges
 let IdentityNodes = datatable(id:string, type:string, department:string, privilegeLevel:string)
@@ -427,6 +471,37 @@ IdentityGraph
 ### Vector Similarity in Graph Context
 
 Another powerful combination is using vector operations within a security graph context, particularly useful for identifying similar attack patterns or entity relationships ([full example](vectorSimilarityAndGraph.kql)):
+
+```
+    User Behavior Similarity
+    +---------+                         +----------+
+    |         |  Cosine                 |          |
+    | User001 +- - - - - - - - - - - - -+ User002  |
+    |         |  Sim=0.997              |          |
+    +----+----+                         +----+-----+
+         |                                   |
+         |                                   |
+         | Standard                          | Admin
+         | Access                            | Access
+         |                                   |
+         v                                   v
+    +---------+                         +----------+
+    |         |                         |          |
+    | Group001|                         | Group002 |
+    |         |                         |          |
+    +----+----+                         +----+-----+
+         |                                   |
+         |                                   |
+         |                                   |
+         v                                   v
+    +--------------------------------------------+
+    |                                            |
+    |               Resource001                  |
+    |                                            |
+    +--------------------------------------------+
+
+                  Vector Similarity and Graph Scenario
+```
 
 ```kusto
 // Define embeddings for user behaviors (as if from an ML model)
