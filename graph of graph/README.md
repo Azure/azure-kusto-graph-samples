@@ -1,5 +1,28 @@
 # Unveiling the Power of "Graph of Graph" in Kusto: A Comprehensive Guide with Real-World Use Cases
 
+```
+                       +-----------------+
+                       |                 |
+                       |  Graph of Graph |
+                       |                 |
+                       +-----------------+
+                              / | \
+                             /  |  \
+             +-------------+   |   +------------+
+             |             |   |   |            |
+             | Identity    |   |   | Network    |
+             | Graph       |   |   | Graph      |
+             |             |   |   |            |
+             +------+------+   |   +------+-----+
+                    |          |          |
+                    |    +-----+-----+    |
+                    |    |           |    |
+                    +--->|  Asset    |<---+
+                         |  Graph    |
+                         |           |
+                         +-----------+
+```
+
 ## Introduction
 
 In today's data-driven security environment, understanding complex relationships between disparate entities is crucial for effective threat detection and response. Kusto Query Language (KQL) offers a powerful capability called "Graph of Graph," which allows analysts to model and analyze interconnected data structures by combining and querying across multiple distinct graph domains.
@@ -8,7 +31,7 @@ John Lambert, CVP Security at Microsoft, aptly captures this imperative: "Defend
 
 ## Understanding "Graph of Graph"
 
-### Concept of "Graph of Graph"
+### Concepts
 
 The "Graph of Graph" approach involves analyzing relationships between multiple distinct graph domains, using the output of one graph query as input to another. Unlike a traditional unified graph approach where all entities exist in a single graph structure, "Graph of Graph" maintains separation between domain-specific graphs while enabling cross-domain analysis through query composition.
 
@@ -25,6 +48,7 @@ By querying these distinct graphs and composing their results, analysts can trac
 John Lambert's observation highlights why "Graph of Graph" is vital for security operations. Attackers don't think in terms of isolated domains; they map relationships across identities, networks, and assets to find paths of least resistance.
 
 For defenders, adopting the "Graph of Graph" methodology provides:
+
 - Detection of complex attack chains that span multiple domains
 - Visibility into lateral movement paths across different system types
 - Identification of security vulnerabilities at the intersection of domains

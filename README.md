@@ -8,7 +8,7 @@ This repository includes several scenarios demonstrating the use of Kusto graph 
 
 - **Digital Twins**: Explore how Kusto graph semantics can be applied to model and analyze digital twins. [Read more](digital%20twins/README.md)
 - **Resource Graph**: Learn how to leverage Kusto graph semantics for resource graph use cases. [Read more](./resource%20graph/README.md)
-- **Graph of Graph**: Cybersecurity and "Graph of Graphs. [Read more](./graph%20of%20graph/README.md)
+- **Graph of Graph**: Cybersecurity and "Graph of Graphs". [Read more](./graph%20of%20graph/README.md)
 
 ## Contributing
 
@@ -26,7 +26,7 @@ contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additio
 
 ## Trademarks
 
-This project may contain trademarks or logos for projects, products, or services. Authorized use of Microsoft 
+This project may contain trademarks or logos for projects, products, or services. Authorized use of Microsoft
 trademarks or logos is subject to and must follow 
 [Microsoft's Trademark & Brand Guidelines](https://www.microsoft.com/en-us/legal/intellectualproperty/trademarks/usage/general).
 Use of Microsoft trademarks or logos in modified versions of this project must not cause confusion or imply Microsoft sponsorship.
