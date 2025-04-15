@@ -1,0 +1,139 @@
+let AuthEvents = datatable(user:string, device:string, timestamp:datetime, success:bool)
+[
+  "User1", "Device1", datetime(2025-04-15T08:30:00Z), true,
+  "User2", "Device2", datetime(2025-04-15T09:15:00Z), true,
+  "User1", "Device2", datetime(2025-04-15T10:20:00Z), false,
+  "User1", "Device2", datetime(2025-04-15T10:21:00Z), false,
+  "User1", "Device2", datetime(2025-04-15T10:23:00Z), false,
+  "User2", "Device3", datetime(2025-04-15T11:05:00Z), true
+];
+// 5. Resource Access Events - Connect Network and Asset graphs
+let AccessEvents = datatable(device:string, resource:string, timestamp:datetime, accessType:string)
+[
+  "Device1", "Resource1", datetime(2025-04-15T08:45:00Z), "Read",
+  "Device2", "Resource2", datetime(2025-04-15T10:35:00Z), "Read",
+  "Device3", "Resource1", datetime(2025-04-15T11:10:00Z), "Write"
+];
+let CompromisedAccounts = 
+    // Create a specialized auth graph
+    AuthEvents
+    | summarize FailedAttempts=countif(success == false), 
+                SuccessfulAttempts=countif(success == true),
+                Times=make_list(timestamp) by user
+    | where FailedAttempts >= 3 and SuccessfulAttempts >= 1
+    | project user;
+let AssetNodes = datatable(id:string, type:string, properties:dynamic)
+[
+  "Resource1", "Database", dynamic({"name": "FinancialDB", "sensitivity": "High"}),
+  "Resource2", "FileShare", dynamic({"name": "ITShare", "sensitivity": "Medium"})
+];
+let AssetEdges = datatable(source:string, target:string, relationship:string)
+[
+  "Resource1", "Resource2", "DependsOn"
+];
+let NetworkNodes = datatable(id:string, type:string, properties:dynamic)
+[
+  "Device1", "Workstation", dynamic({"os": "Windows 10", "location": "Finance Dept"}),
+  "Device2", "Server", dynamic({"os": "Windows Server", "location": "Datacenter"}),
+  "Device3", "Workstation", dynamic({"os": "MacOS", "location": "Marketing Dept"})
+];
+let NetworkEdges = datatable(source:string, target:string, relationship:string, properties:dynamic)
+[
+  "Device1", "Device2", "ConnectsTo", dynamic({"protocol": "RDP", "frequency": "Rare"}),
+  "Device2", "Device3", "ConnectsTo", dynamic({"protocol": "SSH", "frequency": "Regular"}),
+  "Device2", "Device4", "ConnectsTo", dynamic({"protocol": "SSH", "frequency": "Regular"})
+];
+// Build Network Graph
+let NetworkGraph = NetworkEdges
+| make-graph source --> target with NetworkNodes on id;
+// Build Asset Graph
+let AssetGraph = AssetEdges
+| make-graph source --> target with AssetNodes on id;
+let SensitiveResources = AssetGraph
+    | graph-match (resource)--(connected)
+        where resource.properties.sensitivity == "High"
+        project resource.id;
+let UnusualConnections = NetworkGraph
+    | graph-match (source)-[connection]->(target)
+        where connection.properties.frequency == "Rare"
+        project SourceDevice = source.id, TargetDevice = target.id;
+// 1. IDENTITY GRAPH - Users, groups and permissions
+let IdentityNodes = datatable(id:string, type:string, properties:dynamic)
+[
+  "User1", "User", dynamic({"department": "Finance", "accessLevel": "Standard"}),
+  "User2", "User", dynamic({"department": "IT", "accessLevel": "Admin"}),
+  "User3", "User", dynamic({"department": "Marketing", "accessLevel": "Standard"}),
+  "Group1", "Group", dynamic({"name": "Finance-Users"}),
+  "Group2", "Group", dynamic({"name": "IT-Admins"})
+];
+let IdentityEdges = datatable(source:string, target:string, relationship:string)
+[
+  "User1", "Group1", "MemberOf",
+  "User2", "Group2", "MemberOf",
+  "User3", "Group1", "MemberOf",
+  "Group1", "Resource1", "HasAccess",
+  "Group2", "Resource2", "HasAccess"
+];
+// Build Identity Graph
+let IdentityGraph = IdentityEdges
+| make-graph source --> target with IdentityNodes on id;
+let PermissionChains = IdentityGraph
+    | graph-match (user)-[memberOf*1..2]->(group)-[access]->(resource)
+        where user.id in (CompromisedAccounts)
+        and resource.id in (SensitiveResources)
+        // Use the node degree to filter for groups with high connectivity
+        and node_degree_in(group) >= 2
+        project 
+            UserId = user.id, 
+            GroupCount = node_degree_in(group),  // Number of members in the group
+            ResourceId = resource.id;
+// Create a graph from authentication and resource access data
+// First, prepare the graph edges properly with explicit source-target pairs
+let UserDeviceEdges = AuthEvents
+    | where user in (CompromisedAccounts)
+    | where success == true
+    | join kind=inner (
+        AccessEvents
+        | where resource in (SensitiveResources)
+    ) on device
+    | distinct user, device, resource
+    // Create user->device edges
+    | project source=user, target=device, relationship="LoggedInto";
+let DeviceResourceEdges = 
+    AccessEvents
+    | where resource in (SensitiveResources)
+    | distinct device, resource
+    // Create device->resource edges
+    | project source=device, target=resource, relationship="AccessedResource";
+let DeviceToDeviceEdges = NetworkEdges
+    // Create device->device edges
+    | project source=source, target=target, relationship="AccessedDevice";
+// Combine all edges to create a complete graph
+let AllEdges = union
+    UserDeviceEdges,
+    DeviceResourceEdges, 
+    DeviceToDeviceEdges;
+// Create the graph with proper source/target pairs
+let UserDeviceResourceGraph = AllEdges
+    | make-graph source --> target with_node_id=id;
+// Find complete attack paths using a complex pattern across all domains
+UserDeviceResourceGraph
+| graph-match (compromisedUser)-->(initialDevice)-[hop*0..3]->(sensitiveResource)
+    where 
+        // Connect with our identity analysis
+        compromisedUser.id in (CompromisedAccounts)
+        // Connect with our asset analysis
+        and sensitiveResource.id in (SensitiveResources)
+    project
+        CompromisedUser = compromisedUser,
+        InitialDevice = initialDevice,
+        SensitiveResourceAccessed = sensitiveResource,
+        Path = hop,
+        // Report if user has legitimate permissions (additional context)
+        HasLegitimateAccess = compromisedUser in 
+            (PermissionChains | where ResourceId == sensitiveResource | project UserId)
+// Connect with our network analysis - look for rare connections
+| mv-apply hop=Path on (
+    where strcat(hop.source, hop.target) in (UnusualConnections | project strcat(SourceDevice, TargetDevice))
+    | summarize RareConnections=count()
+)

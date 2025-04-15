@@ -1,0 +1,157 @@
+let IdentityNodes = datatable(id:string, type:string, department:string, privilegeLevel:string)
+[
+  "User1", "Employee", "Finance", "Standard",
+  "User2", "Employee", "IT", "Admin",
+  "User3", "Employee", "HR", "Standard",
+  "Group1", "SecurityGroup", "Finance", "Finance-Access",
+  "Group2", "SecurityGroup", "IT", "Admin-Access",
+  "Resource1", "Database", "Finance", "Restricted"
+];
+let IdentityEdges = datatable(source:string, target:string, relationshipType:string)
+[
+  "User1", "Group1", "memberOf",
+  "User2", "Group2", "memberOf",
+  "Group1", "CustomerRecords", "canAccess",
+  "Group2", "CustomerRecords", "canAdminister"
+];
+let NetworkNodes = datatable(id:string, type:string, properties:dynamic)
+[
+  "Device1", "Workstation", dynamic({"os": "Windows 10", "location": "Finance Dept"}),
+  "Device2", "Server", dynamic({"os": "Windows Server", "location": "Datacenter"}),
+  "Device3", "Workstation", dynamic({"os": "MacOS", "location": "Marketing Dept"})
+];
+let NetworkEdges = datatable(source:string, target:string, relationship:string, properties:dynamic)
+[
+  "Device1", "Device2", "ConnectsTo", dynamic({"protocol": "RDP", "frequency": "Rare"}),
+  "Device2", "Device3", "ConnectsTo", dynamic({"protocol": "SSH", "frequency": "Regular"}),
+  "Device2", "Device4", "ConnectsTo", dynamic({"protocol": "SSH", "frequency": "Regular"})
+];
+// 1. IDENTITY GRAPH - Users and permissions
+let IdentityGraph = IdentityEdges
+| make-graph source --> target with IdentityNodes on id;
+// 2. NETWORK GRAPH - Devices and connections  
+let NetworkGraph = NetworkEdges
+| make-graph source --> target with NetworkNodes on id;
+// 3. Time Series Authentication Data
+let AuthLogs = datatable(user:string, device:string, timestamp:datetime, success:bool, anomalyScore:double)
+[
+  // Normal authentication patterns
+  "User1", "Device1", datetime(2025-04-15T08:30:00Z), true, 0.1,
+  "User2", "Device2", datetime(2025-04-15T09:15:00Z), true, 0.2,
+  // Anomalous authentication
+  "User1", "Device3", datetime(2025-04-15T03:30:00Z), true, 0.95 // Unusual time and device
+];
+// 4. Network Flow Time Series with vector embeddings
+let NetworkFlows = datatable(sourceDevice:string, destDevice:string, timestamp:datetime, bytesTransferred:long, flowEmbedding:dynamic)
+[
+  // Historical benign flows (for reference data)
+  "Device1", "Device2", datetime(2025-04-01T08:35:00Z), 1500, dynamic([0.1, 0.2, 0.3, 0.4, 0.5]),
+  "Device1", "Device2", datetime(2025-04-02T08:32:00Z), 1490, dynamic([0.12, 0.19, 0.31, 0.39, 0.51]),
+  "Device1", "Device2", datetime(2025-04-03T08:36:00Z), 1510, dynamic([0.11, 0.21, 0.29, 0.41, 0.49]),
+  "Device1", "Device2", datetime(2025-04-04T08:37:00Z), 1520, dynamic([0.09, 0.22, 0.31, 0.38, 0.52]),
+  "Device1", "Device2", datetime(2025-04-05T08:33:00Z), 1480, dynamic([0.11, 0.18, 0.32, 0.42, 0.48]),
+  "Device2", "Device4", datetime(2025-04-01T09:21:00Z), 2480, dynamic([0.16, 0.24, 0.36, 0.43, 0.56]),
+  "Device2", "Device4", datetime(2025-04-02T09:22:00Z), 2510, dynamic([0.14, 0.26, 0.34, 0.46, 0.54]),
+  "Device2", "Device4", datetime(2025-04-03T09:20:00Z), 2490, dynamic([0.15, 0.25, 0.35, 0.45, 0.55]),
+  "Device2", "Device4", datetime(2025-04-04T09:19:00Z), 2520, dynamic([0.17, 0.23, 0.33, 0.47, 0.53]),
+  "Device2", "Device4", datetime(2025-04-05T09:18:00Z), 2530, dynamic([0.13, 0.27, 0.37, 0.44, 0.57]),
+  // Recent flows including normal and anomalous patterns
+  "Device1", "Device2", datetime(2025-04-15T08:35:00Z), 1500, dynamic([0.1, 0.2, 0.3, 0.4, 0.5]),
+  "Device2", "Device4", datetime(2025-04-15T09:20:00Z), 2500, dynamic([0.15, 0.25, 0.35, 0.45, 0.55]),
+  "Device3", "Device4", datetime(2025-04-15T03:35:00Z), 50000, dynamic([0.8, 0.7, 0.9, 0.3, 0.1]) // Anomalous transfer after suspicious login
+];
+// 5. Sensitive Resource Access Events
+let ResourceAccess = datatable(device:string, resource:string, timestamp:datetime, accessType:string)
+[
+  "Device2", "FinancialDatabase", datetime(2025-04-15T09:30:00Z), "Read",
+  "Device4", "CustomerRecords", datetime(2025-04-15T03:40:00Z), "Write" // Suspicious write after anomalous transfer
+];
+// 6. Detect authentication anomalies
+let AnomalousAuth = AuthLogs
+| where anomalyScore > 0.9
+| project user, device, timestamp;
+// 7. Detect unusual network flows using KNN vector similarity
+let KnownBenignFlows = NetworkFlows
+| where timestamp between(datetime(2025-04-01) .. datetime(2025-04-14))
+| project flowEmbedding;
+let AnomalousFlows = NetworkFlows
+| extend known_benign = toscalar(KnownBenignFlows)
+| evaluate python(
+    typeof(sourceDevice:string, destDevice:string, timestamp:datetime, knnDistance:double),
+```
+import numpy as np
+from sklearn.neighbors import NearestNeighbors
+
+# Extract the query embeddings (what we want to test)
+query_embeddings = np.vstack([np.array(x) for x in df["flowEmbedding"]])
+query_devices_source = df["sourceDevice"].tolist()
+query_devices_dest = df["destDevice"].tolist()
+query_timestamps = df["timestamp"].tolist()
+
+# Extract the known benign embeddings for reference
+known_benign_embeddings = np.vstack([np.array(x) for x in df["known_benign"]])
+
+# Initialize and fit KNN model with k=5
+k = 5
+if len(known_benign_embeddings) >= k:
+    knn = NearestNeighbors(n_neighbors=k)
+    knn.fit(known_benign_embeddings)
+    
+    # Get distances to 5 nearest neighbors for each query
+    distances, _ = knn.kneighbors(query_embeddings)
+    
+    # Average distance for each query point
+    avg_distances = np.mean(distances, axis=1)
+    
+    # Return results
+    result = pd.DataFrame({
+        "sourceDevice": query_devices_source,
+        "destDevice": query_devices_dest,
+        "timestamp": query_timestamps,
+        "knnDistance": avg_distances.tolist()
+    })
+else:
+    # Not enough reference points for KNN
+    result = pd.DataFrame({
+        "sourceDevice": query_devices_source,
+        "destDevice": query_devices_dest,
+        "timestamp": query_timestamps,
+        "knnDistance": [0.0] * len(query_devices_source)
+    })
+```
+)
+| where knnDistance > 0.5 // Higher distance means more unusual
+| project sourceDevice, destDevice, timestamp;
+// 8. Graph traversal to find complete attack paths
+let AttackSequence = AnomalousAuth
+| join kind=inner (AnomalousFlows) on $left.device == $right.sourceDevice
+| extend abs(timestamp - timestamp1) < 10m // Flow occurred within 10 minutes of anomalous auth
+| project user, initialDevice = device, compromisedDevice = destDevice, authTime = timestamp, flowTime = timestamp1;
+// 9. Look for sensitive resource access following the attack sequence
+let SuspiciousAccess = AttackSequence
+| join kind=inner (ResourceAccess) on $left.compromisedDevice == $right.device
+| where timestamp between (flowTime .. 1h) // Access occurred within an hour of suspicious flow
+| project user, initialDevice, compromisedDevice, resource, AccessTime = timestamp, accessType;
+// 10. Use IdentityGraph to find the user's legitimate permissions
+let UserPermissions = IdentityGraph
+| graph-match (user)-[memberOf*0..3]->(group)-[access]->(resource)
+    where user.id in (SuspiciousAccess | project user) and group.type == "SecurityGroup"
+    project UserId = user.id, ResourceId = resource.id;
+// 11. Complete attack chain analysis using Graph of Graph pattern
+SuspiciousAccess
+| join kind=innerunique UserPermissions 
+    on $left.user == $right.UserId and $left.resource == $right.ResourceId
+| join kind=innerunique (AnomalousAuth | project user, device, AuthTime=timestamp ) 
+    on user and $left.initialDevice == $right.device
+| join kind=innerunique (AnomalousFlows | project sourceDevice , destDevice, FlowTime=timestamp ) 
+    on $left.initialDevice == $right.sourceDevice and $left.compromisedDevice == $right.destDevice
+| extend AttackDuration = AccessTime - AuthTime
+| project
+    CompromisedUser = user,
+    AuthAnomalyDevice = initialDevice,
+    NetworkPivot = compromisedDevice,
+    SensitiveResourceAccessed = resource,
+    AccessType = accessType,
+    AttackTimelineSeries = bag_pack_columns(AccessTime, AuthTime, FlowTime),
+    TotalAttackDurationMinutes = AttackDuration / 1m,
+    PotentialDataExfiltration = accessType == "Write"

@@ -1,0 +1,52 @@
+let IdentityNodes = datatable(id:string, type:string, department:string, privilegeLevel:string)
+[
+  "User001", "Employee", "Finance", "Standard",
+  "User002", "Employee", "IT", "Admin",
+  "User003", "Employee", "HR", "Standard",
+  "Group001", "SecurityGroup", "Finance", "Finance-Access",
+  "Group002", "SecurityGroup", "IT", "Admin-Access",
+  "Resource001", "Database", "Finance", "Restricted"
+];
+let IdentityEdges = datatable(source:string, target:string, relationshipType:string)
+[
+  "User001", "Group001", "memberOf",
+  "User002", "Group002", "memberOf",
+  "Group001", "Resource001", "canAccess",
+  "Group002", "Resource001", "canAdminister"
+];
+// 2. Define time series data for authentication events
+let AuthEvents = datatable(userId:string, timestamp:datetime, eventType:string, success:bool, location:string)
+[
+  // Normal authentication pattern
+  "User001", datetime(2025-04-15T08:00:00Z), "login", true, "Seattle",
+  "User001", datetime(2025-04-15T17:05:00Z), "logout", true, "Seattle",
+  "User001", datetime(2025-04-16T08:10:00Z), "login", true, "Seattle",
+  "User001", datetime(2025-04-16T17:15:00Z), "logout", true, "Seattle",
+  // User002 normal pattern
+  "User002", datetime(2025-04-15T09:00:00Z), "login", true, "Seattle",
+  "User002", datetime(2025-04-15T18:00:00Z), "logout", true, "Seattle",
+  // Anomalous pattern - unusual time and location
+  "User002", datetime(2025-04-16T03:20:00Z), "login", true, "Bangkok",
+  "User002", datetime(2025-04-16T03:25:00Z), "accessResource", true, "Bangkok",
+  "User002", datetime(2025-04-16T03:40:00Z), "logout", true, "Bangkok"
+];
+// 3. Use series_decompose_anomalies to detect unusual login patterns
+let AnomalousUsers = AuthEvents
+| where eventType == "login" and success == true
+| make-series LoginCount=count() on timestamp from datetime(2025-04-15) to datetime(2025-04-17) step 1h by userId
+| extend (anomalies, scores, baseline) = series_decompose_anomalies(LoginCount, 1.5, -1, 'linefit')
+| where anomalies has "1"
+| distinct userId;
+let IdentityGraph = IdentityEdges
+| make-graph source --> target with IdentityNodes on id;
+IdentityGraph
+| graph-match (anomalousUser)-[access*1..3]->(sensitiveResource)
+    where anomalousUser.id in (AnomalousUsers)
+    and sensitiveResource.type == "Database"
+    project 
+        AnomalousUser = anomalousUser.id, 
+        Department = anomalousUser.department,
+        PrivilegeLevel = anomalousUser.privilegeLevel,
+        SensitiveResource = sensitiveResource.id,
+        // Use the map() function to extract the access path
+        AccessPath = map(access, target)
