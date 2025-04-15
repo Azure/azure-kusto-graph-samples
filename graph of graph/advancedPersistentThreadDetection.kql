@@ -12,7 +12,7 @@ let AccessEvents = datatable(device:string, resource:string, timestamp:datetime,
 [
   "Device1", "Resource1", datetime(2025-04-15T08:45:00Z), "Read",
   "Device2", "Resource2", datetime(2025-04-15T10:35:00Z), "Read",
-  "Device3", "Resource1", datetime(2025-04-15T11:10:00Z), "Write"
+  "Device3", "Resource1", datetime(2025-04-15T11:10:00Z), "Read/Write"
 ];
 let CompromisedAccounts = 
     // Create a specialized auth graph
