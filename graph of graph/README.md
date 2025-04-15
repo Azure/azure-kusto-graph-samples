@@ -92,8 +92,6 @@ What makes "Graph of Graph" powerful is the ability to compose queries across mu
 
 Consider a scenario where an organization wants to detect sophisticated attackers who might be using a combination of compromised credentials, network pivoting, and data access to exfiltrate sensitive information. Instead of building a single unified graph, we'll maintain separate graphs for each domain and compose queries across them.
 
-Let's model this scenario with KQL graph semantics ([full example](advancedPersistentThreadDetection.kql)):
-
 ```
     +-------------+  Failed   +-------------+           +-------------+
     |             | Attempts  |             |           |             |
@@ -116,6 +114,8 @@ Let's model this scenario with KQL graph semantics ([full example](advancedPersi
 
                 Advanced Persistent Threat Detection Scenario
 ```
+
+Let's model this scenario with KQL graph semantics ([full example](advancedPersistentThreadDetection.kql)):
 
 ```kusto
 // 1. IDENTITY GRAPH - Users, groups and permissions
@@ -341,7 +341,7 @@ While the "Graph of Graph" pattern is powerful on its own, its true potential em
 
 ### Time Series Analysis with Graph Context
 
-One of the most powerful integrations is combining graph analysis with time series analytics. Consider a scenario where we need to analyze authentication anomalies in the context of a user privilege graph ([full example](timeseriesAndGraph.kql)):
+One of the most powerful integrations is combining graph analysis with time series analytics.
 
 ```
     +---------+                                  +--------------+
@@ -363,6 +363,8 @@ One of the most powerful integrations is combining graph analysis with time seri
 
                          Time Series and Graph Scenario
 ```
+
+Consider a scenario where we need to analyze authentication anomalies in the context of a user privilege graph ([full example](timeseriesAndGraph.kql)):
 
 ```kusto
 // 1. Define the identity graph with users and their privileges
