@@ -93,7 +93,7 @@ flowchart LR
     Device2 --> Device3
     User1 -->|Auth| Device1
     Device1 -->|RDP Rare| Device2
-    Device1 -->|Direct Access| Resource1["Resource1\n(Sensitive)"]
+    Device1 -->|Direct Access| Resource1["Resource1<br>(Sensitive)"]
     Device3 -->|Access| Resource1
     
     subgraph "Advanced Persistent Threat Detection Scenario"
@@ -341,8 +341,8 @@ One of the most powerful integrations is combining graph analysis with time seri
 
 ```mermaid
 flowchart TD
-    User002["User002"] -->|"Unusual Login\n(3am Bangkok)\nNormal: 9am-6pm Seattle"| Group002
-    Group002 --> Resource001["Resource001\n(Database)"]
+    User002["User002"] -->|"Unusual Login<br>(3am Bangkok)<br>Normal: 9am-6pm Seattle"| Group002
+    Group002 --> Resource001["Resource001<br>(Database)"]
     
     style User002 fill:#f9f,stroke:#333,stroke-width:2px
     style Group002 fill:#bbf,stroke:#333,stroke-width:2px
@@ -576,23 +576,23 @@ flowchart TD
     end
 
     subgraph EntityRelationships ["Entity Relationships"]
-        UG[Users & Groups\nRelationships]
-        DC[Devices &\nConnections]
-        RA[Resources &\nAccess Events]
+        UG[Users & Groups<br>Relationships]
+        DC[Devices &<br>Connections]
+        RA[Resources &<br>Access Events]
     end
 
     subgraph TimeSeriesAnalysis ["Time Series Analysis"]
-        AL[Auth Logs\nTime Series]
-        NF[Network Flows\nVector Analysis]
+        AL[Auth Logs<br>Time Series]
+        NF[Network Flows<br>Vector Analysis]
     end
 
     subgraph AnomalyDetection ["Anomaly Detection"]
-        AD[Anomaly\nDetection]
-        FA[Flow\nAnomalies (KNN)]
+        AD[Anomaly<br>Detection]
+        FA[Flow<br>Anomalies via KNN]
     end
     
-    ASC[Attack Sequence\nCorrelation]
-    GGA[Graph of Graph\nAttack Analysis]
+    ASC[Attack Sequence\<br>Correlation]
+    GGA[Graph of Graph<br>Attack Analysis]
     
     IG --> UG
     NG --> DC
@@ -777,17 +777,17 @@ The following picture shows the attack path detected in the example: User1's ano
 flowchart LR
     subgraph Timeline ["Attack Timeline"]
         direction TB
-        T1["3:30 AM\nAnomaly Score > 0.9"]
-        T2["3:35 AM\nKNN Distance > 0.5"]
-        T3["3:40 AM\nWrite Access"]
+        T1["3:30 AM<br>Anomaly Score > 0.9"]
+        T2["3:35 AM<br>KNN Distance > 0.5"]
+        T3["3:40 AM<br>Write Access"]
         
         T1 --> T2 --> T3
     end
     
-    User1["User1\n(Compromised)"] -->|"1. Anomalous Auth\n(3:30 AM, score 0.95)"| Device3
-    Device3["Device3"] -->|"2. Suspicious Flow\n(50000 bytes)"| Device4
-    Group1["Group1\nSecurityGroup"] -->|"Legitimate Access"| CustomerRecords
-    Device4["Device4"] -->|"3. Sensitive Resource\nAccess (3:40 AM, Write)"| CustomerRecords["CustomerRecords"]
+    User1["User1<br>(Compromised)"] -->|"1. Anomalous Auth<br>(3:30 AM, score 0.95)"| Device3
+    Device3["Device3"] -->|"2. Suspicious Flow<br>(50000 bytes)"| Device4
+    Group1["Group1<br>SecurityGroup"] -->|"Legitimate Access"| CustomerRecords
+    Device4["Device4"] -->|"3. Sensitive Resource<br>Access (3:40 AM, Write)"| CustomerRecords["CustomerRecords"]
     
     classDef userNode fill:#f9f,stroke:#333,stroke-width:2px;
     classDef deviceNode fill:#bbf,stroke:#33f,stroke-width:2px;
@@ -816,16 +816,14 @@ The results from "Graph of Graph" analyses can be visualized as interconnected d
 
 ```mermaid
 flowchart TD
-    IG[Identity Graph] -->|Auth Events| NG[Network Graph]
-    NG -->|Auth Events| IG
-    NG -->|Access Events| AG[Asset Graph]
-    AG -->|Access Events| NG
+    IG[Identity Graph] <-->|Events| NG[Network Graph]
+    NG <--> |Events| AG[Asset Graph]
     
-    IG --> CA[Compromised\nAccounts]
-    NG --> LM[Lateral\nMovement]
-    AG --> SR[Sensitive\nResources]
+    IG --> CA[Compromised<br>Accounts]
+    NG --> LM[Lateral<br>Movement]
+    AG --> SR[Sensitive<br>Resources]
     
-    CA --> CAP[Complete Attack\nPaths]
+    CA --> CAP[Complete Attack<br>Paths]
     LM --> CAP
     SR --> CAP
     
