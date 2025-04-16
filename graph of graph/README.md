@@ -89,6 +89,9 @@ Consider a scenario where an organization wants to detect sophisticated attacker
 
 ```mermaid
 flowchart LR
+
+    subgraph "Advanced Persistent Threat Detection Scenario"
+
     User1[User1] -->|Failed Attempts| Device2
     Device2 --> Device3
     User1 -->|Auth| Device1
@@ -96,19 +99,13 @@ flowchart LR
     Device1 -->|Direct Access| Resource1["Resource1<br>(Sensitive)"]
     Device3 -->|Access| Resource1
     
-    subgraph "Advanced Persistent Threat Detection Scenario"
-    User1
-    Device1
-    Device2
-    Device3
-    Resource1
-    end
-    
     style User1 fill:#f9f,stroke:#333,stroke-width:2px
     style Device1 fill:#bbf,stroke:#333,stroke-width:2px
     style Device2 fill:#bbf,stroke:#333,stroke-width:2px
     style Device3 fill:#bbf,stroke:#333,stroke-width:2px
     style Resource1 fill:#bfb,stroke:#333,stroke-width:2px
+    
+    end
 ```
 
 Let's model this scenario with KQL graph semantics ([full example](advancedPersistentThreadDetection.kql)):
@@ -591,7 +588,7 @@ flowchart TD
         FA[Flow<br>Anomalies via KNN]
     end
     
-    ASC[Attack Sequence\<br>Correlation]
+    ASC[Attack Sequence<br>Correlation]
     GGA[Graph of Graph<br>Attack Analysis]
     
     IG --> UG
