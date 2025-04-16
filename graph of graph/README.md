@@ -1,26 +1,20 @@
 # Unveiling the Power of "Graph of Graph" in Kusto: A Comprehensive Guide with Real-World Use Cases
 
-```
-                       +-----------------+
-                       |                 |
-                       |  Graph of Graph |
-                       |                 |
-                       +-----------------+
-                              / | \
-                             /  |  \
-             +-------------+   |   +------------+
-             |             |   |   |            |
-             | Identity    |   |   | Network    |
-             | Graph       |   |   | Graph      |
-             |             |   |   |            |
-             +------+------+   |   +------+-----+
-                    |          |          |
-                    |    +-----+-----+    |
-                    |    |           |    |
-                    +--->|  Asset    |<---+
-                         |  Graph    |
-                         |           |
-                         +-----------+
+```mermaid
+flowchart TD
+    GG[Graph of Graph] --- IG
+    GG --- NG
+    GG --- AG
+    
+    IG[Identity Graph] --> AG
+    NG[Network Graph] --> AG
+    
+    AG[Asset Graph]
+    
+    style GG fill:#f9f,stroke:#333,stroke-width:2px
+    style IG fill:#bbf,stroke:#333,stroke-width:2px
+    style NG fill:#bbf,stroke:#333,stroke-width:2px
+    style AG fill:#bfb,stroke:#333,stroke-width:2px
 ```
 
 ## Introduction
@@ -93,27 +87,28 @@ What makes "Graph of Graph" powerful is the ability to compose queries across mu
 
 Consider a scenario where an organization wants to detect sophisticated attackers who might be using a combination of compromised credentials, network pivoting, and data access to exfiltrate sensitive information. Instead of building a single unified graph, we'll maintain separate graphs for each domain and compose queries across them.
 
-```
-    +-------------+  Failed   +-------------+           +-------------+
-    |             | Attempts  |             |           |             |
-    |    User1    +---------->+   Device2   +---------->+   Device3   |
-    |             |           |             |           |             |
-    +------+------+           +------+------+           +------+------+
-           |                         ^                         |
-           | Auth                    |                         | Access
-           v                         |                         v
-    +-------------+                  |                  +-------------+
-    |             |                  |                  |             |
-    |   Device1   +------------------+                  |  Resource1  |
-    |             |    RDP (Rare)                       | (Sensitive) |
-    +------+------+                                     +-------------+
-           |                                                   ^
-           |                                                   |
-           |                                                   |
-           +---------------------------------------------------+
-                              Direct Access
-
-                Advanced Persistent Threat Detection Scenario
+```mermaid
+flowchart LR
+    User1[User1] -->|Failed Attempts| Device2
+    Device2 --> Device3
+    User1 -->|Auth| Device1
+    Device1 -->|RDP Rare| Device2
+    Device1 -->|Direct Access| Resource1["Resource1\n(Sensitive)"]
+    Device3 -->|Access| Resource1
+    
+    subgraph "Advanced Persistent Threat Detection Scenario"
+    User1
+    Device1
+    Device2
+    Device3
+    Resource1
+    end
+    
+    style User1 fill:#f9f,stroke:#333,stroke-width:2px
+    style Device1 fill:#bbf,stroke:#333,stroke-width:2px
+    style Device2 fill:#bbf,stroke:#333,stroke-width:2px
+    style Device3 fill:#bbf,stroke:#333,stroke-width:2px
+    style Resource1 fill:#bfb,stroke:#333,stroke-width:2px
 ```
 
 Let's model this scenario with KQL graph semantics ([full example](advancedPersistentThreadDetection.kql)):
@@ -344,25 +339,20 @@ While the "Graph of Graph" pattern is powerful on its own, its true potential em
 
 One of the most powerful integrations is combining graph analysis with time series analytics.
 
-```
-    +---------+                                  +--------------+
-    |         |  Unusual Login (3am Bangkok)     |              |
-    | User002 +--------------------------------->+ Group002     |
-    |         |  Normal: 9am-6pm Seattle         |              |
-    +---------+                                  +------+-------+
-                                                        |
-                                                        |
-                                                        |
-                                                        |
-                                                        v
-                                                 +--------------+
-                                                 |              |
-                                                 | Resource001  |
-                                                 | (Database)   |
-                                                 |              |
-                                                 +--------------+
-
-                         Time Series and Graph Scenario
+```mermaid
+flowchart TD
+    User002["User002"] -->|"Unusual Login\n(3am Bangkok)\nNormal: 9am-6pm Seattle"| Group002
+    Group002 --> Resource001["Resource001\n(Database)"]
+    
+    style User002 fill:#f9f,stroke:#333,stroke-width:2px
+    style Group002 fill:#bbf,stroke:#333,stroke-width:2px
+    style Resource001 fill:#bfb,stroke:#333,stroke-width:2px
+    
+    subgraph "Time Series and Graph Scenario"
+    User002
+    Group002
+    Resource001
+    end
 ```
 
 Consider a scenario where we need to analyze authentication anomalies in the context of a user privilege graph ([full example](timeseriesAndGraph.kql)):
@@ -475,35 +465,27 @@ IdentityGraph
 
 Another powerful combination is using vector operations within a security graph context, particularly useful for identifying similar attack patterns or entity relationships ([full example](vectorSimilarityAndGraph.kql)):
 
-```
-    User Behavior Similarity
-    +---------+                         +----------+
-    |         |  Cosine                 |          |
-    | User001 +- - - - - - - - - - - - -+ User002  |
-    |         |  Sim=0.997              |          |
-    +----+----+                         +----+-----+
-         |                                   |
-         |                                   |
-         | Standard                          | Admin
-         | Access                            | Access
-         |                                   |
-         v                                   v
-    +---------+                         +----------+
-    |         |                         |          |
-    | Group001|                         | Group002 |
-    |         |                         |          |
-    +----+----+                         +----+-----+
-         |                                   |
-         |                                   |
-         |                                   |
-         v                                   v
-    +--------------------------------------------+
-    |                                            |
-    |               Resource001                  |
-    |                                            |
-    +--------------------------------------------+
-
-                  Vector Similarity and Graph Scenario
+```mermaid
+ flowchart TD
+    User001["User001"] -.->|"Cosine Sim=0.997"| User002["User002"]
+    User001 -->|"Standard Access"| Group001
+    User002 -->|"Admin Access"| Group002
+    Group001 --> Resource001
+    Group002 --> Resource001["Resource001"]
+    
+    subgraph "Vector Similarity and Graph Scenario"
+    User001
+    User002
+    Group001
+    Group002
+    Resource001
+    end
+    
+    style User001 fill:#f9f,stroke:#333,stroke-width:2px
+    style User002 fill:#f9f,stroke:#333,stroke-width:2px
+    style Group001 fill:#bbf,stroke:#333,stroke-width:2px
+    style Group002 fill:#bbf,stroke:#333,stroke-width:2px
+    style Resource001 fill:#bfb,stroke:#333,stroke-width:2px
 ```
 
 ```kusto
@@ -585,54 +567,58 @@ To fully demonstrate the power of combining "Graph of Graph" with other KQL capa
 
 The following picture shows the overall data sources and graph structure.
 
-```
-+----------------+      +----------------+      +----------------+
-|                |      |                |      |                |
-| IDENTITY GRAPH |      | NETWORK GRAPH  |      | RESOURCE DATA  |
-|                |      |                |      |                |
-+-------+--------+      +-------+--------+      +-------+--------+
-        |                       |                       |
-        v                       v                       v
-+-------+--------+      +-------+--------+      +-------+--------+
-| Users & Groups |      | Devices &      |      | Resources &    |
-| Relationships  |      | Connections    |      | Access Events  |
-+-------+--------+      +-------+--------+      +-------+--------+
-        |                       |                       |
-        +----------+------------+-----------+-----------+
-                   |                        |
-                   v                        v
-           +-------+---------+     +--------+--------+
-           |                 |     |                 |
-           | Auth Logs       |     | Network Flows   |
-           | Time Series     |     | Vector Analysis |
-           |                 |     |                 |
-           +-------+---------+     +--------+--------+
-                   |                        |
-                   v                        v
-           +-------+---------+     +--------+--------+
-           |                 |     |                 |
-           | Anomaly         |     | Flow            |
-           | Detection       |     | Anomalies (KNN) |
-           |                 |     |                 |
-           +-------+---------+     +--------+--------+
-                   |                        |
-                   +------------+-----------+
-                                |
-                                v
-                      +---------+---------+
-                      |                   |
-                      | Attack Sequence   |
-                      | Correlation       |
-                      |                   |
-                      +---------+---------+
-                                |
-                                v
-                      +---------+---------+
-                      |                   |
-                      | Graph of Graph    |
-                      | Attack Analysis   |
-                      |                   |
-                      +---------+---------+
+```mermaid
+flowchart TD
+    subgraph DataSources ["Data Sources"]
+        IG[IDENTITY GRAPH]
+        NG[NETWORK GRAPH]
+        RD[RESOURCE DATA]
+    end
+
+    subgraph EntityRelationships ["Entity Relationships"]
+        UG[Users & Groups\nRelationships]
+        DC[Devices &\nConnections]
+        RA[Resources &\nAccess Events]
+    end
+
+    subgraph TimeSeriesAnalysis ["Time Series Analysis"]
+        AL[Auth Logs\nTime Series]
+        NF[Network Flows\nVector Analysis]
+    end
+
+    subgraph AnomalyDetection ["Anomaly Detection"]
+        AD[Anomaly\nDetection]
+        FA[Flow\nAnomalies (KNN)]
+    end
+    
+    ASC[Attack Sequence\nCorrelation]
+    GGA[Graph of Graph\nAttack Analysis]
+    
+    IG --> UG
+    NG --> DC
+    RD --> RA
+    
+    UG --> AL
+    UG --> NF
+    DC --> AL
+    DC --> NF
+    RA --> NF
+    
+    AL --> AD
+    NF --> FA
+    
+    AD --> ASC
+    FA --> ASC
+    
+    ASC --> GGA
+
+    classDef sourceNode fill:#e6f7ff,stroke:#1890ff,stroke-width:2px;
+    classDef processNode fill:#f6ffed,stroke:#52c41a,stroke-width:2px;
+    classDef resultNode fill:#fff2e8,stroke:#fa8c16,stroke-width:2px;
+    
+    class DataSources,IG,NG,RD sourceNode;
+    class EntityRelationships,UG,DC,RA,TimeSeriesAnalysis,AL,NF,AnomalyDetection,AD,FA,ASC processNode;
+    class GGA resultNode;
 ```
 
 Now let's look at the actual structure of the query.
@@ -785,46 +771,33 @@ SuspiciousAccess
 |---|---|---|---|---|---|---|---|
 |User1|Device3|Device4|CustomerRecords|Write|{<br>  "accessTime": "2025-04-15T03:40:00.0000000Z",<br>  "AuthTime": "2025-04-15T03:30:00.0000000Z",<br>  "FlowTime": "2025-04-15T03:35:00.0000000Z"<br>}|10|True|
 
- The following picture shows the attack path detected in the example: User1's anomalous authentication to Device3, followed by suspicious network flow to Device4, and culminating in unauthorized write access to CustomerRecords - all happening within a 10-minute timeframe.
+The following picture shows the attack path detected in the example: User1's anomalous authentication to Device3, followed by suspicious network flow to Device4, and culminating in unauthorized write access to CustomerRecords - all happening within a 10-minute timeframe.
 
-```
-                                 ATTACK PATH DETECTION WORKFLOW
-                                 
-   +-------------+                                               +--------------+
-   |             | 1. Anomalous Auth                             |              |
-   |   User1     +---------------------------------------------->|   Device3    |
-   |             | (3:30 AM, score 0.95)                         |              |
-   +-------------+                                               +------+-------+
-                                                                        |
-                                                                        | 2. Suspicious
-                                                                        | Network Flow
-                                                                        | (3:35 AM, 50000 bytes)
-                                                                        |
-                                                                        v
-  +-------------+                                               +-------+------+
-  |             |                                               |              |
-  |   Group1    |                                               |   Device4    |
-  | SecurityGrp |                                               |              |
-  +------+------+                                               +------+-------+
-         |                                                             |
-         |                                                             | 3. Sensitive
-         |                        Unauthorized Access Path             | Resource Access
-         |                        ====================                 | (3:40 AM, "Write")
-         v                                                             v
-  +------+--------------------------------------------+      +--------+-------+
-  |                                                   |      |                |
-  |                 CustomerRecords                   |<-----+                |
-  |                                                   |      | Data           |
-  +---------------------------------------------------+      | Exfiltration   |
-                                                             |                |
-                                                             +----------------+
-
-TIMELINE:                                              DETECTION METHODS:
-========                                               ================
-3:30 AM: Anomalous Authentication                      - Auth Anomaly Score > 0.9
-3:35 AM: Suspicious Network Flow                       - Vector Embedding KNN Distance > 0.5  
-3:40 AM: Sensitive Resource Access                     - Graph Traversal for Access Paths
-Total Attack Duration: 10 minutes                      - Temporal Correlation (Events within 10 min)
+```mermaid
+flowchart LR
+    subgraph Timeline ["Attack Timeline"]
+        direction TB
+        T1["3:30 AM\nAnomaly Score > 0.9"]
+        T2["3:35 AM\nKNN Distance > 0.5"]
+        T3["3:40 AM\nWrite Access"]
+        
+        T1 --> T2 --> T3
+    end
+    
+    User1["User1\n(Compromised)"] -->|"1. Anomalous Auth\n(3:30 AM, score 0.95)"| Device3
+    Device3["Device3"] -->|"2. Suspicious Flow\n(50000 bytes)"| Device4
+    Group1["Group1\nSecurityGroup"] -->|"Legitimate Access"| CustomerRecords
+    Device4["Device4"] -->|"3. Sensitive Resource\nAccess (3:40 AM, Write)"| CustomerRecords["CustomerRecords"]
+    
+    classDef userNode fill:#f9f,stroke:#333,stroke-width:2px;
+    classDef deviceNode fill:#bbf,stroke:#33f,stroke-width:2px;
+    classDef resourceNode fill:#ff9,stroke:#993,stroke-width:2px;
+    classDef timelineNode fill:#efe,stroke:#3a3,stroke-width:1px;
+    
+    class User1 userNode;
+    class Device3,Device4 deviceNode;
+    class Group1,CustomerRecords resourceNode;
+    class Timeline,T1,T2,T3 timelineNode;
 ```
 
 This comprehensive example demonstrates the true power of "Graph of Graph" when combined with other KQL capabilities:
@@ -841,29 +814,28 @@ By combining these different analytical paradigms, security analysts can detect 
 
 The results from "Graph of Graph" analyses can be visualized as interconnected diagrams that clearly display cross-domain relationships:
 
-```
-┌─────────────┐      Auth      ┌─────────────┐     Access     ┌─────────────┐
-│             │ ─────Events───▶│             │───Events─────▶│             │
-│  Identity   │                │   Network   │                │   Asset     │
-│   Graph     │◀────Events────┤    Graph    │◀───Events──────┤    Graph    │
-│             │                │             │                │             │
-└─────────────┘                └─────────────┘                └─────────────┘
-       │                             │                             │
-       │                             │                             │
-       ▼                             ▼                             ▼
-┌─────────────┐               ┌─────────────┐               ┌─────────────┐
-│Compromised  │               │ Lateral     │               │ Sensitive   │
-│ Accounts    │               │ Movement    │               │ Resources   │
-└─────────────┘               └─────────────┘               └─────────────┘
-       │                             │                             │
-       │                             │                             │
-       └──────────────────┬──────────┴─────────────────────────────┘
-                          │
-                          ▼
-                  ┌───────────────┐
-                  │Complete Attack│
-                  │    Paths      │
-                  └───────────────┘
+```mermaid
+flowchart TD
+    IG[Identity Graph] -->|Auth Events| NG[Network Graph]
+    NG -->|Auth Events| IG
+    NG -->|Access Events| AG[Asset Graph]
+    AG -->|Access Events| NG
+    
+    IG --> CA[Compromised\nAccounts]
+    NG --> LM[Lateral\nMovement]
+    AG --> SR[Sensitive\nResources]
+    
+    CA --> CAP[Complete Attack\nPaths]
+    LM --> CAP
+    SR --> CAP
+    
+    classDef graphNode fill:#bbf,stroke:#333,stroke-width:2px;
+    classDef analysisNode fill:#bfb,stroke:#333,stroke-width:2px;
+    classDef resultNode fill:#f9f,stroke:#333,stroke-width:2px;
+    
+    class IG,NG,AG graphNode;
+    class CA,LM,SR analysisNode;
+    class CAP resultNode;
 ```
 
 This visual representation shows how separate domain-specific analyses feed into a comprehensive understanding of potential attack paths.
