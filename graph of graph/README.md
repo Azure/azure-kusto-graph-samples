@@ -464,25 +464,21 @@ Another powerful combination is using vector operations within a security graph 
 
 ```mermaid
  flowchart TD
+    subgraph "Vector Similarity and Graph Scenario"
+
     User001["User001"] -.->|"Cosine Sim=0.997"| User002["User002"]
     User001 -->|"Standard Access"| Group001
     User002 -->|"Admin Access"| Group002
     Group001 --> Resource001
     Group002 --> Resource001["Resource001"]
     
-    subgraph "Vector Similarity and Graph Scenario"
-    User001
-    User002
-    Group001
-    Group002
-    Resource001
-    end
-    
     style User001 fill:#f9f,stroke:#333,stroke-width:2px
     style User002 fill:#f9f,stroke:#333,stroke-width:2px
     style Group001 fill:#bbf,stroke:#333,stroke-width:2px
     style Group002 fill:#bbf,stroke:#333,stroke-width:2px
     style Resource001 fill:#bfb,stroke:#333,stroke-width:2px
+
+    end
 ```
 
 ```kusto
@@ -781,10 +777,10 @@ flowchart LR
         T1 --> T2 --> T3
     end
     
-    User1["User1<br>(Compromised)"] -->|"1. Anomalous Auth<br>(3:30 AM, score 0.95)"| Device3
-    Device3["Device3"] -->|"2. Suspicious Flow<br>(50000 bytes)"| Device4
+    User1["User1<br>(Compromised)"] -->| Anomalous Auth<br>3:30 AM, score 0.95| Device3
+    Device3["Device3"] -->|Suspicious Flow<br>50000 bytes| Device4
     Group1["Group1<br>SecurityGroup"] -->|"Legitimate Access"| CustomerRecords
-    Device4["Device4"] -->|"3. Sensitive Resource<br>Access (3:40 AM, Write)"| CustomerRecords["CustomerRecords"]
+    Device4["Device4"] -->|Sensitive Resource<br>Access 3:40 AM, Write| CustomerRecords["CustomerRecords"]
     
     classDef userNode fill:#f9f,stroke:#333,stroke-width:2px;
     classDef deviceNode fill:#bbf,stroke:#33f,stroke-width:2px;
