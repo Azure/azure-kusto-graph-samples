@@ -89,8 +89,7 @@ Consider a scenario where an organization wants to detect sophisticated attacker
 
 ```mermaid
 flowchart LR
-
-    subgraph "Advanced Persistent Threat Detection Scenario"
+    Headline["Advanced Persistent Threat Detection Scenario"]
 
     User1[User1] -->|Failed Attempts| Device2
     Device2 --> Device3
@@ -104,8 +103,7 @@ flowchart LR
     style Device2 fill:#bbf,stroke:#333,stroke-width:2px
     style Device3 fill:#bbf,stroke:#333,stroke-width:2px
     style Resource1 fill:#bfb,stroke:#333,stroke-width:2px
-    
-    end
+    style Headline fill:f9f
 ```
 
 Let's model this scenario with KQL graph semantics ([full example](advancedPersistentThreadDetection.kql)):
@@ -338,18 +336,15 @@ One of the most powerful integrations is combining graph analysis with time seri
 
 ```mermaid
 flowchart TD
+    Headline["Time Series and Graph Scenario"]
+
     User002["User002"] -->|"Unusual Login<br>(3am Bangkok)<br>Normal: 9am-6pm Seattle"| Group002
     Group002 --> Resource001["Resource001<br>(Database)"]
     
     style User002 fill:#f9f,stroke:#333,stroke-width:2px
     style Group002 fill:#bbf,stroke:#333,stroke-width:2px
     style Resource001 fill:#bfb,stroke:#333,stroke-width:2px
-    
-    subgraph "Time Series and Graph Scenario"
-    User002
-    Group002
-    Resource001
-    end
+    style Headline fill:f9f
 ```
 
 Consider a scenario where we need to analyze authentication anomalies in the context of a user privilege graph ([full example](timeseriesAndGraph.kql)):
@@ -464,7 +459,7 @@ Another powerful combination is using vector operations within a security graph 
 
 ```mermaid
  flowchart TD
-    subgraph "Vector Similarity and Graph Scenario"
+    Headline["Vector Similarity and Graph Scenario"]
 
     User001["User001"] -.->|"Cosine Sim=0.997"| User002["User002"]
     User001 -->|"Standard Access"| Group001
@@ -477,8 +472,7 @@ Another powerful combination is using vector operations within a security graph 
     style Group001 fill:#bbf,stroke:#333,stroke-width:2px
     style Group002 fill:#bbf,stroke:#333,stroke-width:2px
     style Resource001 fill:#bfb,stroke:#333,stroke-width:2px
-
-    end
+    style Headline fill:f9f
 ```
 
 ```kusto
