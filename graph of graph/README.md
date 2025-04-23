@@ -108,11 +108,11 @@ By combining these analytical paradigms, security analysts can detect sophistica
 
 [Explore Advanced KQL Capabilities →](advanced-kql-capabilities.md)
 
-## Visualizing Graph of Graph Results
+## Cross-Domain Relationship Diagrams
 
-Visualizing results from "Graph of Graph" analyses helps analysts understand complex relationships spanning multiple domains. This section explores visualization approaches and additional use cases beyond security, including supply chain optimization and customer journey analysis.
+Understanding the relationships between different domains is critical when working with "Graph of Graph" analyses. This section illustrates how to diagram cross-domain connections effectively, showing integrated views of multiple domain-specific analyses and providing examples of applications beyond security.
 
-[Learn about visualization and additional use cases →](visualizing-results.md)
+[Learn about cross-domain relationship diagrams and additional use cases →](visualizing-results.md)
 
 ## Conclusion
 
